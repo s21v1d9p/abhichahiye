@@ -29,7 +29,7 @@ All entities carry `app = "abhichahiye"` and `kind`. Attribute names are lowerca
 | `site` | camp coordinator wallet | `site_type` (camp/collection/kitchen), `state`, `district`, `lat_e6`, `lng_e6` (u64, degrees × 1e6), `people` (u64) | name, landmark, public helpline | 7 days; extended whenever the camp confirms a need (camp open = alive) | — |
 | `need` | camp coordinator wallet | `site` (entity key), `state`, `district`, `item`, `qty` (u64), `urgency` (u64 1–3), `lat_e6`, `lng_e6` | note | urgency 3 → 6 h, 2 → 12 h, 1 → 24 h; re-confirm = `extendEntity` by the camp | — |
 | `pledge` | donor / relief-group wallet | `need` (key), `site` (key), `district`, `item`, `qty` (u64), `eta` (u64 unix s) | vehicle/route note (no personal data) | `atDate(eta + 2 h)`; donor may extend (explicit, visible delay) or delete (cancel) | — |
-| `receipt` | camp coordinator wallet | `pledge` (key), `need` (key), `site` (key), `qty` (u64), `pledger` (addr) | — | 30 days | readonly |
+| `receipt` | camp coordinator wallet | `pledge` (key), `need` (key), `site` (key), `district`, `qty` (u64), `pledger` (addr) | — | 30 days | readonly |
 | `vouch` | district-authority wallet | `org` (addr), `district` | — | 30 days | readonly |
 
 What deliberately stays off Arkiv: victims' names, phone numbers and IDs; household locations (only public sites); photos; money and payments; routing/logistics. All demo data is synthetic.
