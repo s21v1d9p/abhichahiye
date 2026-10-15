@@ -378,8 +378,8 @@ export function createMemChain(options: MemChainOptions = {}) {
     watchEntityEvents,
   } as unknown as PublicClient
 
-  function wallet() {
-    const account = privateKeyToAccount(generatePrivateKey())
+  function wallet(privateKey: Hex = generatePrivateKey()) {
+    const account = privateKeyToAccount(privateKey)
     const executeBatch = async (data: ExecuteBatchParameters) => {
       const { txHash, created } = execute(account.address, data)
       return {

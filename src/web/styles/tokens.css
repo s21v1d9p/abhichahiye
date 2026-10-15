@@ -1,0 +1,38 @@
+:root {
+  color-scheme: light;
+
+  /* Unbleached relief-crate paper, blue-black ink, tarpaulin blue, marigold and vermilion tape. */
+  --paper: #f2ebdb;
+  --paper-deep: #e8dcc3;
+  --card: #fbf6e9;
+  --ink: #12202b;
+  --ink-soft: #43515d;
+  --ink-faint: #76818b;
+  --tarp: #0a68a4;
+  --tarp-deep: #07497a;
+  --tarp-wash: #d6e6f1;
+  --marigold: #f2a100;
+  --marigold-wash: #fae6b4;
+  --vermilion: #d02f1c;
+  --vermilion-wash: #f4d3cc;
+  --moss: #2b7a4b;
+  --moss-wash: #d3e8d9;
+  --rule: rgba(18, 32, 43, 0.18);
+
+  --font-display: "Big Shoulders Stencil Display", Impact, "Arial Narrow", sans-serif;
+  --font-body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", "Noto Sans Devanagari", "Devanagari Sangam MN", "Nirmala UI", "Noto Sans Bengali", "Bangla Sangam MN", sans-serif;
+  --font-indic: "Noto Sans Devanagari", "Devanagari Sangam MN", "Kohinoor Devanagari", "Nirmala UI", "Noto Sans Bengali", "Bangla Sangam MN", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --step--1: clamp(0.78rem, 0.76rem + 0.1vw, 0.86rem);
+  --step-0: clamp(1rem, 0.97rem + 0.15vw, 1.08rem);
+  --step-1: clamp(1.15rem, 1.05rem + 0.5vw, 1.4rem);
+  --step-2: clamp(1.6rem, 1.3rem + 1.4vw, 2.3rem);
+  --step-3: clamp(2.4rem, 1.7rem + 3.2vw, 4rem);
+  --step-4: clamp(3rem, 2rem + 4.6vw, 5.6rem);
+
+  --edge: 2px solid var(--ink);
+  --shadow: 5px 5px 0 var(--ink);
+  --shadow-sm: 3px 3px 0 var(--ink);
+  --space: clamp(1rem, 0.7rem + 1.6vw, 2rem);
+}

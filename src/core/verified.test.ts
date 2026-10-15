@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { computeGaps } from "./gaps"
 import { createMemChain, type MemChain } from "./memchain"
-import { loadDistrict, loadVerifiedDistrict } from "./queries"
+import { isVouched, loadDistrict, loadVerifiedDistrict } from "./queries"
 import { s } from "./records"
 import { DISTRICT, ROLES, runScenario, type Wallets } from "./scenario"
 import { createSite, pledgeTo, postNeed } from "./writes"
@@ -100,5 +100,17 @@ describe("loadVerifiedDistrict", () => {
     const verified = await loadVerifiedDistrict(chain.pub, { district: DISTRICT }, authority())
     expect(verified.vouches).toEqual([])
     expect(verified.needs).toEqual([])
+  })
+})
+
+describe("isVouched", () => {
+  it("is true only for organisations a trusted authority vouched for", async () => {
+    await runScenario(chain.pub, wallets)
+    const trusted = authority()
+    expect(await isVouched(chain.pub, wallets.camp_silapathar.account.address, trusted)).toBe(true)
+    expect(await isVouched(chain.pub, wallets.ngo_majuli.account.address, trusted)).toBe(true)
+    expect(await isVouched(chain.pub, wallets.impostor.account.address, trusted)).toBe(false)
+    expect(await isVouched(chain.pub, wallets.camp_silapathar.account.address, [])).toBe(false)
+    expect(await isVouched(chain.pub, wallets.camp_silapathar.account.address, [chain.wallet().account.address])).toBe(false)
   })
 })

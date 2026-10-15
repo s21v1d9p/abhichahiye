@@ -7,7 +7,7 @@ import { type Gap, computeGaps } from "./gaps"
 import { type Box, slug, toE6 } from "./geo"
 import { type Rec, s, toRec } from "./records"
 import { APP, type Item, KIND, type Kind } from "./schema"
-import { trustedOrgs } from "./trust"
+import { isAuthenticNeed, trustedOrgs } from "./trust"
 
 const PAGE_SIZE = 200
 const MAX_RESULTS = 1000
@@ -127,9 +127,9 @@ export async function loadVerifiedDistrict(client: PublicClient, f: DistrictFilt
   return assemble(block, { needs, pledges, receipts, sites, orgs, vouches: cappedVouches })
 }
 
-export function boxWhere(b: Box): Expression[] {
+function rangeWhere(kind: Kind, b: Box): Expression[] {
   return [
-    ...ofKind("need"),
+    ...ofKind(kind),
     gte("lat_e6", u64(toE6(b.south))),
     lte("lat_e6", u64(toE6(b.north))),
     gte("lng_e6", u64(toE6(b.west))),
@@ -137,12 +137,34 @@ export function boxWhere(b: Box): Expression[] {
   ]
 }
 
+export const boxWhere = (b: Box): Expression[] => rangeWhere("need", b)
+export const siteBoxWhere = (b: Box): Expression[] => rangeWhere("site", b)
+
 // A zoomed-out map can extend past the 0..180 degrees the e6 attributes can hold; nothing exists out there.
 const clampDegrees = (deg: number) => Math.min(180, Math.max(0, deg))
+const clampBox = (b: Box): Box => ({ south: clampDegrees(b.south), west: clampDegrees(b.west), north: clampDegrees(b.north), east: clampDegrees(b.east) })
 
 export async function needsInBox(client: PublicClient, b: Box): Promise<Rec[]> {
-  const box = { south: clampDegrees(b.south), west: clampDegrees(b.west), north: clampDegrees(b.north), east: clampDegrees(b.east) }
-  return (await fetchAll(client, boxWhere(box))).recs
+  return (await fetchAll(client, boxWhere(clampBox(b)))).recs
+}
+
+// Everything the map needs for one viewport, across districts: the camps inside it and the needs that are really
+// theirs. Both are numeric range queries on lat_e6 / lng_e6, read at one block.
+export async function loadBox(client: PublicClient, b: Box) {
+  const box = clampBox(b)
+  const block = await client.getBlockNumber()
+  const [needs, sites] = await Promise.all([
+    fetchAll(client, boxWhere(box), {}, block),
+    fetchAll(client, siteBoxWhere(box), {}, block),
+  ])
+  const sitesByKey = new Map<string, Rec>(sites.recs.map((x) => [x.key, x]))
+  return {
+    block,
+    truncated: needs.truncated || sites.truncated,
+    needs: needs.recs.filter((x) => isAuthenticNeed(x, sitesByKey)),
+    sites: sites.recs,
+    sitesByKey,
+  }
 }
 
 export async function myEntities(client: PublicClient, kind: Kind, owner: Hex): Promise<Rec[]> {
@@ -167,6 +189,17 @@ export async function receiptExists(client: PublicClient, pledge: Hex, camp: Hex
     .select({ key: true })
     .where([...ofKind("receipt"), eq("pledge", key(pledge))])
     .createdBy(camp)
+    .limit(1)
+    .fetch()
+  return page.entities.length > 0
+}
+
+// Whether a live vouch for this organisation was created by one of the wallets the viewer trusts.
+export async function isVouched(client: PublicClient, org: Hex, authorities: Hex[]): Promise<boolean> {
+  if (authorities.length === 0) return false
+  const page = await client
+    .select({ key: true })
+    .where([...ofKind("vouch"), eq("org", addr(org)), or(authorities.map((a) => eq("$creator", addr(a))))])
     .limit(1)
     .fetch()
   return page.entities.length > 0
