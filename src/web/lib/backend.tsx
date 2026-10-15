@@ -15,14 +15,16 @@ export type Backend = {
 }
 
 async function createTiramisu(): Promise<Backend> {
-  const pub = makePublicClient()
+  // An Arkiv access key, if this build has one, is only used once the public endpoint's anonymous budget runs out.
+  const key = import.meta.env.VITE_ARKIV_KEY as string | undefined
+  const pub = makePublicClient(key)
   let ws: Pick<PublicClient, "watchEntityEvents"> | undefined
   return {
     mode: "tiramisu",
     pub,
     events: () => (ws ??= makeWsClient()),
     authorities: TRUSTED_AUTHORITIES,
-    makeWallet: makeWalletClient,
+    makeWallet: (privateKey) => makeWalletClient(privateKey, key),
     async fund(address) {
       const res = await fetch("/api/drip", {
         method: "POST",

@@ -3,7 +3,7 @@ import { Link } from "wouter"
 import type { Hex } from "viem"
 import { explorerAddress } from "../../core/arkiv"
 import { formatDuration, shortHex } from "../../core/format"
-import { isVouched, loadNeed, myEntities, type NeedView } from "../../core/queries"
+import { loadNeed, type NeedView } from "../../core/queries"
 import { n, s } from "../../core/records"
 import type { Item } from "../../core/schema"
 import { Stamp, VouchBadge } from "../components/Badge"
@@ -15,10 +15,13 @@ import type { Snap } from "../lib/chainTime"
 import { ITEM_LABELS, asUrgency, urgencyLabel } from "../lib/labels"
 import { needUrl, shareMessage, whatsappLink } from "../lib/share"
 import { useBoard } from "../lib/store"
+import { useLiveEvents } from "../lib/live"
+import { friendlyError } from "../lib/tx"
 import { LIFETIME } from "../../core/schema"
 
 type Loaded = { view: NeedView; fetchedAt: number; vouched: boolean; orgName: string }
-const POLL_MS = 15_000
+// Live events refresh the page when anything about this need changes; this is the safety net (two queries each).
+const POLL_MS = 60_000
 
 const DEAD = {
   gone: {
@@ -193,18 +196,11 @@ export default function NeedPage({ needKey }: { needKey: string }) {
 
   const load = useCallback(async () => {
     try {
-      const view = await loadNeed(backend.pub, needKey as Hex)
-      let vouched = false
-      let orgName = ""
-      if (view.state === "live") {
-        vouched = await isVouched(backend.pub, view.need.creator, backend.authorities)
-        const [org] = await myEntities(backend.pub, "org", view.need.creator)
-        orgName = String(org?.payload.name ?? "")
-      }
-      setLoaded({ view, fetchedAt: Date.now(), vouched, orgName })
+      const view = await loadNeed(backend.pub, needKey as Hex, undefined, backend.authorities)
+      setLoaded({ view, fetchedAt: Date.now(), vouched: view.state === "live" && view.vouched, orgName: view.state === "live" ? view.orgName : "" })
       setError(undefined)
     } catch (e) {
-      setError(e instanceof Error ? (e.message.split("\n")[0] ?? "Unknown error") : String(e))
+      setError(friendlyError(e))
     }
   }, [backend, needKey])
 
@@ -216,6 +212,10 @@ export default function NeedPage({ needKey }: { needKey: string }) {
     }, POLL_MS)
     return () => clearInterval(timer)
   }, [load])
+
+  // Re-read as soon as the need itself changes, or its camp writes anything (a re-confirmation, a receipt).
+  const camp = loaded?.view.state === "live" ? loaded.view.need.creator : undefined
+  useLiveEvents(backend, (key, owner) => key === needKey.toLowerCase() || (owner !== undefined && owner === camp), () => void load())
 
   return (
     <section className="verdict-wrap">

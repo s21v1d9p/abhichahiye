@@ -1,0 +1,564 @@
+/* ---------- Consoles: camp, donor, district office ---------- */
+.console {
+  max-width: 980px;
+  gap: 1.25rem;
+}
+
+.console__head {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.kicker {
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--vermilion);
+}
+
+.console__h2 {
+  margin-top: 1.5rem;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: var(--step-2);
+  letter-spacing: 0.03em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.console .note {
+  margin-top: 0;
+}
+
+/* The wallet: a luggage tag pinned to the top of the page. */
+.wallet {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.5rem 1.25rem;
+  align-items: end;
+  padding: 0.9rem 1.1rem;
+  background: var(--card);
+  border: var(--edge);
+  box-shadow: var(--shadow-sm);
+}
+
+.wallet__id,
+.wallet__balance {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.wallet__address,
+.wallet__glm {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+
+.wallet__note {
+  grid-column: 1 / -1;
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
+
+@media (max-width: 560px) {
+  .wallet {
+    grid-template-columns: 1fr auto;
+  }
+
+  .wallet .btn {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Transaction status: a strip of receipt paper. */
+.txstatus {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.4rem;
+  padding: 0.65rem 1rem;
+  font-size: var(--step--1);
+  border: 2px solid var(--ink);
+  border-left-width: 8px;
+  background: var(--card);
+}
+
+.txstatus--pending {
+  border-left-color: var(--marigold);
+}
+
+.txstatus--done {
+  border-left-color: var(--moss);
+  background: var(--moss-wash);
+}
+
+.txstatus--error {
+  border-left-color: var(--vermilion);
+  background: var(--vermilion-wash);
+}
+
+.txstatus__spin {
+  width: 0.9rem;
+  height: 0.9rem;
+  border: 2px solid var(--ink);
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Steps: a dispatch ledger with stencilled numerals. */
+.steps {
+  display: grid;
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1rem;
+  padding: 1rem 1.1rem;
+  background: var(--card);
+  border: var(--edge);
+  box-shadow: var(--shadow);
+}
+
+.step__num {
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 1.9rem;
+  line-height: 1;
+  color: var(--paper);
+  background: var(--ink);
+  border: 2px solid var(--ink);
+}
+
+.step__body {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.step__title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: var(--step-1);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.step--done {
+  background: var(--paper);
+  box-shadow: var(--shadow-sm);
+}
+
+.step--done .step__num {
+  color: #fff;
+  background: var(--moss);
+}
+
+.step__done {
+  color: var(--ink-soft);
+}
+
+.step--locked {
+  opacity: 0.6;
+  box-shadow: none;
+  border-style: dashed;
+}
+
+.step--locked .step__num {
+  color: var(--ink);
+  background: transparent;
+}
+
+.step__locked {
+  color: var(--ink-soft);
+}
+
+/* Forms */
+.form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.9rem 1rem;
+  align-items: start;
+}
+
+.field--wide,
+.form .pick,
+.form .urgency,
+.form__actions {
+  grid-column: 1 / -1;
+}
+
+.form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 1rem;
+}
+
+select.field__input {
+  appearance: none;
+  padding-right: 2.2rem;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink) 50%), linear-gradient(135deg, var(--ink) 50%, transparent 50%);
+  background-position: calc(100% - 17px) 55%, calc(100% - 11px) 55%;
+  background-size: 6px 6px;
+  background-repeat: no-repeat;
+}
+
+/* Item picker: a shelf of crates. */
+.pick {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.pick legend {
+  grid-column: 1 / -1;
+  margin-bottom: 0.4rem;
+  padding: 0;
+}
+
+.pick__opt {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 0.2rem;
+  padding: 0.7rem 0.4rem 0.6rem;
+  text-align: center;
+  background: var(--card);
+  border: 2px solid var(--ink);
+  cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.12s, background 0.12s;
+}
+
+.pick__opt input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pick__opt:hover {
+  background: var(--paper-deep);
+}
+
+.pick__opt:has(input:checked) {
+  color: var(--paper);
+  background: var(--ink);
+  box-shadow: 3px 3px 0 var(--marigold);
+  transform: translate(-1px, -1px);
+}
+
+.pick__opt:has(input:focus-visible) {
+  outline: 3px solid var(--marigold);
+  outline-offset: 2px;
+}
+
+.pick__icon {
+  width: 30px;
+  height: 30px;
+}
+
+.pick__en {
+  font-weight: 700;
+  font-size: 0.92rem;
+  line-height: 1.15;
+}
+
+.pick__hi {
+  font-family: var(--font-indic);
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+
+/* Urgency: three stamped tickets. */
+.urgency {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.urgency legend {
+  grid-column: 1 / -1;
+  margin-bottom: 0.4rem;
+  padding: 0;
+}
+
+.urgency__opt {
+  --rail: var(--tarp);
+  position: relative;
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.65rem 0.8rem 0.65rem 1.25rem;
+  background: var(--card);
+  border: 2px solid var(--ink);
+  cursor: pointer;
+}
+
+.urgency__opt--u3 {
+  --rail: var(--vermilion);
+}
+
+.urgency__opt--u2 {
+  --rail: var(--marigold);
+}
+
+.urgency__opt::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 7px;
+  background: var(--rail);
+}
+
+.urgency__opt input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.urgency__opt b {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.25rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.urgency__opt span {
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
+
+.urgency__opt:has(input:checked) {
+  background: var(--paper-deep);
+  box-shadow: 3px 3px 0 var(--ink);
+  transform: translate(-1px, -1px);
+}
+
+.urgency__opt:has(input:checked) b::after {
+  content: " ✓";
+}
+
+.urgency__opt:has(input:focus-visible) {
+  outline: 3px solid var(--marigold);
+  outline-offset: 2px;
+}
+
+/* My needs and pledges */
+.mine__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
+  gap: 1.25rem;
+}
+
+.mine,
+.pledge {
+  --rail: var(--tarp);
+  position: relative;
+  display: grid;
+  gap: 0.6rem;
+  padding: 1rem 1.1rem 1.1rem 1.5rem;
+  background: var(--card);
+  border: var(--edge);
+  box-shadow: var(--shadow);
+}
+
+.mine::before,
+.pledge::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 10px;
+  background: var(--rail);
+  border-right: 2px solid var(--ink);
+}
+
+.pledge {
+  --rail: var(--moss);
+}
+
+.mine__head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.8rem;
+  align-items: center;
+}
+
+.mine__pledges {
+  display: grid;
+  gap: 0.4rem;
+  padding-top: 0.6rem;
+  border-top: 2px dashed var(--ink);
+}
+
+.mine__pledges ul,
+.pledge-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pledge-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.8rem;
+  padding: 0.55rem 0.75rem;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+}
+
+.pledge-list .pledge-row {
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+}
+
+.pledge-row__eta {
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
+
+.pledge-row__status {
+  padding: 0.05rem 0.45rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 2px solid var(--ink);
+}
+
+.pledge-row--received .pledge-row__status {
+  color: #fff;
+  background: var(--moss);
+}
+
+.pledge-row--need-gone .pledge-row__status {
+  border-style: dashed;
+  color: var(--ink-soft);
+}
+
+.pledge-row__actions,
+.mine__pledges .btn {
+  margin-left: auto;
+}
+
+.pledge-row__actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+/* District office directory */
+.controls--inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  padding: 0;
+}
+
+.controls--inline .field {
+  flex: 0 1 280px;
+}
+
+.directory {
+  display: grid;
+  border: var(--edge);
+  box-shadow: var(--shadow);
+  background: var(--card);
+}
+
+.directory__row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) 9rem minmax(0, 1.6fr);
+  gap: 0.5rem 1rem;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--rule);
+}
+
+.directory__row--head > :last-child {
+  text-align: right;
+}
+
+.directory__row--head {
+  border-top: 0;
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--paper);
+  background: var(--ink);
+}
+
+.directory__row > span:first-child {
+  display: grid;
+}
+
+.directory__meta {
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
+
+.directory__wallet {
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+}
+
+.directory__action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem 0.6rem;
+}
+
+@media (max-width: 720px) {
+  .directory__row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .directory__row--head {
+    display: none;
+  }
+
+  .directory__wallet {
+    grid-column: 1;
+  }
+
+  .directory__action {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}

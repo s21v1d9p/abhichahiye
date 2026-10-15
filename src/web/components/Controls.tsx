@@ -1,11 +1,9 @@
 import { useEffect, useState } from "react"
 import { ITEMS } from "../../core/schema"
 import { DISTRICT_SUGGESTIONS } from "../lib/config"
-import { ITEM_LABELS } from "../lib/labels"
+import { ITEM_LABELS, titleCase } from "../lib/labels"
 import { useBoard } from "../lib/store"
 import { ItemIcon } from "./ItemIcon"
-
-const titleCase = (slug: string) => slug.replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase())
 
 export function Controls() {
   const { district, setDistrict, filters, setFilters } = useBoard()

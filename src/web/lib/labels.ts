@@ -21,3 +21,6 @@ const URGENCY: Record<Urgency, { en: string; hi: string; short: string }> = {
 
 export const urgencyLabel = (u: Urgency) => URGENCY[u]
 export const asUrgency = (value: bigint | number): Urgency => (value === 3n || value === 3 ? 3 : value === 2n || value === 2 ? 2 : 1)
+
+// "north_lakhimpur" → "North Lakhimpur": districts are stored as slugs and shown as names.
+export const titleCase = (slug: string) => slug.replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase())

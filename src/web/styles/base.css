@@ -296,6 +296,11 @@ code {
   border-style: dashed;
 }
 
+.badge--authority {
+  color: var(--marigold);
+  background: var(--ink);
+}
+
 .note {
   margin-top: 1.5rem;
   padding: 0.8rem 1rem;

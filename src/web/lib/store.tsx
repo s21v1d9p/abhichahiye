@@ -12,6 +12,7 @@ import type { Snap } from "./chainTime"
 import { DEFAULT_DISTRICT, REFRESH_MS } from "./config"
 import { asUrgency } from "./labels"
 import { useLiveEvents } from "./live"
+import { friendlyError } from "./tx"
 
 export type Filters = { minUrgency: 1 | 2 | 3; item: Item | "all"; view: "open" | "verified" }
 
@@ -74,7 +75,7 @@ function toRows(data: DistrictData, gaps: Gap[], trusted: Set<Address>): NeedRow
   })
 }
 
-const message = (e: unknown) => (e instanceof Error ? e.message.split("\n")[0] ?? "Unknown error" : String(e))
+const message = (e: unknown) => friendlyError(e)
 const STORAGE_KEY = "abhichahiye:district"
 
 const BoardContext = createContext<Board | undefined>(undefined)
@@ -159,12 +160,20 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     return { rows: toRows(data, gaps, trusted), rejected: data.needs.length - gaps.length }
   }, [snapshot, trusted])
 
-  const knownKeys = useMemo(() => {
+  const known = useMemo(() => {
     const keys = new Set<string>()
-    if (snapshot) for (const list of [snapshot.data.needs, snapshot.data.pledges, snapshot.data.receipts, snapshot.data.sites, snapshot.data.orgs, snapshot.data.vouches]) for (const r of list) keys.add(r.key)
-    return keys
+    const wallets = new Set<string>()
+    if (snapshot) {
+      for (const list of [snapshot.data.needs, snapshot.data.pledges, snapshot.data.receipts, snapshot.data.sites, snapshot.data.orgs, snapshot.data.vouches]) {
+        for (const r of list) {
+          keys.add(r.key)
+          wallets.add(r.creator)
+        }
+      }
+    }
+    return { keys, wallets }
   }, [snapshot])
-  const live = useLiveEvents(backend, (key) => knownKeys.has(key), () => void load())
+  const live = useLiveEvents(backend, (key, owner) => known.keys.has(key) || (owner !== undefined && known.wallets.has(owner)), () => void load())
 
   const value: Board = {
     district,

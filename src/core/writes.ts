@@ -197,3 +197,6 @@ export async function vouchFor(w: WalletClient, x: { org: Address; district: str
 }
 
 export const cancelPledge = (w: WalletClient, pledgeKey: Hex) => w.deleteEntity({ entityKey: pledgeKey })
+
+// A vouch is read-only, so it can never be edited, but its creator can withdraw it at any time.
+export const withdrawVouch = (w: WalletClient, vouchKey: Hex) => w.deleteEntity({ entityKey: vouchKey })
