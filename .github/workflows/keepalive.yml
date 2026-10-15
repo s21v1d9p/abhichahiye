@@ -1,0 +1,35 @@
+# The demo camps keep confirming their needs, as real camps would, so the live board is never empty when someone
+# looks at it. Every need still lapses by itself the moment this stops: nothing here bypasses Entity Expiration.
+# Needs live 6 to 24 hours and are re-confirmed once 40% of their lifetime has passed, so an hourly run with a few
+# skipped hours still keeps them alive.
+name: Keep the demo camps confirming
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: keepalive
+  cancel-in-progress: false
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Re-confirm ageing needs and keep the demo pledge alive
+        run: npm run seed
+        env:
+          SEED_WALLETS_JSON: ${{ secrets.SEED_WALLETS_JSON }}
+          VITE_ARKIV_KEY: ${{ secrets.VITE_ARKIV_KEY }}
+          FUNDER_PK: ${{ secrets.FUNDER_PK }}

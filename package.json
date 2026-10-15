@@ -8,8 +8,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
-    "seed": "tsx --env-file=.env scripts/seed.ts",
-    "probe": "tsx --env-file=.env scripts/probe.ts",
+    "seed": "tsx --env-file-if-exists=.env scripts/seed.ts",
+    "probe": "tsx --env-file-if-exists=.env scripts/probe.ts",
     "friction": "tsx scripts/friction-repro.ts",
     "abhi": "tsx --env-file-if-exists=.env cli/abhi.ts"
   },

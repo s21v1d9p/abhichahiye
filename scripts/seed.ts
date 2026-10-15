@@ -1,8 +1,9 @@
 // Seeds the synthetic Assam flood scenario on Tiramisu and checks what the chain now shows.
-//   npm run seed                      fund the demo wallets from FUNDER_PK, run the scenario, assert
+//   npm run seed                      fund the demo wallets from FUNDER_PK if low, run the scenario, assert
 //   npm run seed -- --demo-expiry     also post a need that lapses by itself after three minutes
 //   npm run seed -- --mem             dry run on an in-memory chain (no funds, no network)
-// Re-running is safe: every step first checks what already exists, and also re-confirms needs that are ageing.
+// Re-running is safe: every step first checks what already exists, and re-confirms needs that are ageing. That makes
+// this script the demo's keepalive too: .github/workflows/keepalive.yml runs it every hour with SEED_WALLETS_JSON.
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { formatEther, type Hex, parseEther } from "viem"
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts"
@@ -19,19 +20,22 @@ function loadKeys(): Record<Role, Hex> {
   const fromEnv = process.env.SEED_WALLETS_JSON
   if (fromEnv) return JSON.parse(fromEnv) as Record<Role, Hex>
   if (existsSync(FILE)) return JSON.parse(readFileSync(FILE, "utf8")) as Record<Role, Hex>
+  // A scheduled run must keep the existing demo wallets alive, never quietly start a second set.
+  if (process.env.CI) throw new Error("SEED_WALLETS_JSON is not set: refusing to create new demo wallets in CI")
   const keys = Object.fromEntries(ROLES.map((role) => [role, generatePrivateKey()])) as Record<Role, Hex>
   writeFileSync(FILE, JSON.stringify(keys, null, 2), { mode: 0o600 })
   console.log(`created ${FILE} (git-ignored, testnet keys only)`)
   return keys
 }
 
+// Each write costs about 0.0001 GLM, so 0.05 GLM keeps a demo wallet going for months; FUNDER_PK is only needed then.
 async function fundWallets(pub: PublicClient, keys: Record<Role, Hex>) {
-  const funderKey = process.env.FUNDER_PK as Hex | undefined
-  if (!funderKey) throw new Error("FUNDER_PK missing in .env")
-  const funder = makeWalletClient(funderKey, process.env.VITE_ARKIV_KEY)
   const balances = await Promise.all(ROLES.map(async (role) => [role, await pub.getBalance({ address: privateKeyToAccount(keys[role]).address })] as const))
   const needy = balances.filter(([, balance]) => balance < MIN_BALANCE).map(([role]) => role)
   if (needy.length === 0) return console.log("all demo wallets are funded")
+  const funderKey = process.env.FUNDER_PK as Hex | undefined
+  if (!funderKey) throw new Error(`${needy.join(", ")} need test GLM: set FUNDER_PK`)
+  const funder = makeWalletClient(funderKey, process.env.VITE_ARKIV_KEY)
   const have = await pub.getBalance({ address: funder.account.address })
   const need = FUND_EACH * BigInt(needy.length)
   if (have < need + parseEther("0.01")) {
