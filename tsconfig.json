@@ -13,5 +13,5 @@
     "isolatedModules": true,
     "types": ["node"]
   },
-  "include": ["src", "cli", "scripts", "api"]
+  "include": ["src", "cli", "scripts", "api", "vite.config.ts", "vitest.config.ts"]
 }
