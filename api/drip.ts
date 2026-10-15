@@ -1,4 +1,5 @@
-import { dripFromEnv } from "../src/server/drip"
+// Explicit .js extensions: Vercel runs each file as native Node ESM, which does not guess extensions.
+import { dripFromEnv } from "../src/server/drip.js"
 
 // POST /api/drip {"address": "0x…"}: a little test GLM for a new browser wallet (Tiramisu testnet only).
 const drip = dripFromEnv(process.env)

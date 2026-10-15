@@ -1,5 +1,6 @@
-import { PUBLIC_HTTP } from "../src/core/arkiv"
-import { createRpcProxy } from "../src/server/rpcProxy"
+// Explicit .js extensions: Vercel runs each file as native Node ESM, which does not guess extensions.
+import { PUBLIC_HTTP } from "../src/core/arkiv.js"
+import { createRpcProxy } from "../src/server/rpcProxy.js"
 
 // POST /api/rpc: Arkiv queries with the project's access key added on the server. Browsers only come here after the
 // public endpoint has answered 429 (its anonymous query budget is spent); see src/core/arkiv.ts.

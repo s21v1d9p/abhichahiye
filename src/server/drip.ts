@@ -1,6 +1,6 @@
 import { getAddress, type Hex, isAddress, parseEther } from "viem"
 import { privateKeyToAccount } from "viem/accounts"
-import { makePublicClient, makeWalletClient } from "../core/arkiv"
+import { makePublicClient, makeWalletClient } from "../core/arkiv.js"
 
 // Tops up a browser's test wallet with a little test GLM so a camp or donor can write to Arkiv without first
 // visiting a faucet. Testnet only. Best-effort limits: per network address, and the drip wallet holds little.
