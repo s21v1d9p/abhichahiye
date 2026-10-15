@@ -1,13 +1,13 @@
 # AbhiChahiye data contract
 
-Everything AbhiChahiye knows lives in **Arkiv entities** on the Tiramisu testnet (chain id `7738577`). There is no application backend. Any program that can call the Arkiv RPC can read, verify and extend this data without asking us.
+Everything AbhiChahiye knows lives in **Arkiv entities** on the Tiramisu testnet (chain id `7738577`). No AbhiChahiye server stores or serves this data. Any program that can call the Arkiv RPC can read, verify and extend it without asking us. (The web app has two tiny serverless helpers that hold no data: `/api/drip` gives a new browser wallet a little test GLM, and `/api/rpc` adds our access key to queries once Arkiv's anonymous budget is spent.)
 
 - SDK: `@arkiv-network/sdk` 0.8.1 · RPC: `https://rpc.tiramisu.db-chain.testnet.arkiv.network` · WebSocket: `wss://rpc.tiramisu.db-chain.testnet.arkiv.network`
 - Code that builds every attribute below: [`src/core/attrs.ts`](../src/core/attrs.ts) · lifetimes: [`src/core/schema.ts`](../src/core/schema.ts) · queries: [`src/core/queries.ts`](../src/core/queries.ts)
 
 ## Conventions
 
-- Every entity carries `app = str('abhichahiye')` and `kind = str('<kind>')`. Filter on both so other apps on the chain never leak in.
+- Every entity carries `app = str('abhichahiye')` and `kind = str('<kind>')`. Always filter on `app`, so other apps on the chain never leak in.
 - Attribute names are lowercase `snake_case` (the node rejects uppercase names even though the SDK accepts them; see friction F4).
 - Anything you filter on is an attribute. Anything only displayed is in the JSON payload (the payload is not queryable).
 - Numbers that need ranges are `u64`. Quantities (`qty`, `people`) are whole numbers from 1 to 10,000,000. Latitude and longitude are stored as degrees × 1,000,000 in `lat_e6` / `lng_e6` (`u64`, so only 0..180 degrees; fine for India).
@@ -48,21 +48,24 @@ Everything AbhiChahiye knows lives in **Arkiv entities** on the Tiramisu testnet
 
 ## Queries the app runs
 
-All are plain `arkiv_query` predicates (shown as the exact string the SDK sends).
+Every `arkiv_query` costs 100 units of the caller's budget, a one-key lookup included (friction F9), so each view is one or two queries and the browser filters and sorts the rest. Shown as the exact string the SDK sends.
 
-1. **District gap board** (`needsWhere`)
-   `app = str('abhichahiye') AND kind = str('need') AND district = str('dhemaji') AND urgency >= u64(1)`
-   The urgency floor changes the clause (`urgency >= u64(2)`), and an item filter appends `AND item = str('water')`.
-2. **Map viewport** (`boxWhere`, numeric ranges on `u64`)
-   `app = str('abhichahiye') AND kind = str('need') AND lat_e6 >= u64(24000000) AND lat_e6 <= u64(29000000) AND lng_e6 >= u64(89000000) AND lng_e6 <= u64(97000000)`
-3. **Everything else for a district** (same shape, one query per kind, all in parallel):
-   `… AND kind = str('pledge') AND district = str('dhemaji')` (also `receipt`, `site`, `vouch`); `org` is read without a district filter.
-4. **A wallet's own entities**: any of the above with the SDK's `ownedBy(wallet)` (the shorthand for `$owner = addr(wallet)`).
-5. **Duplicate-receipt guard**: `app = str('abhichahiye') AND kind = str('receipt') AND pledge = key(0x…)` with `createdBy(camp)` (`$creator = addr(camp)`).
-6. **Verified board** (`loadVerifiedDistrict`): scoped by creator at the query level, so the node never even returns entities from other wallets. First the vouches, `app = str('abhichahiye') AND kind = str('vouch') AND district = str('dhemaji') AND ($creator = addr(0xAUTHORITY1…) OR $creator = addr(0xAUTHORITY2…))`; then every other query is the same as above with one more clause, `AND ($creator = addr(0xORG1…) OR $creator = addr(0xORG2…) OR …)`, listing the wallets those live vouches name (up to 40 per district).
-7. **Live updates**: `watchEntityEvents` over a WebSocket transport with no `fromBlock` (a real `eth_subscribe`, not polling). Events are chain-wide, so each created/changed key is fetched and kept only if `app = abhichahiye`. There is no event when an entity expires, so the UI counts down from `expiresAt` and drops the entity itself.
+1. **District board** (`loadDistrict`). Every kind carries `district`, so one query returns the needs, pledges, receipts, sites, organisations and vouches of a district:
+   `app = str('abhichahiye') AND district = str('dhemaji')`
+   The urgency and item filters are applied in the browser. If a need's organisation is registered in another district, one more query fetches its name: `app = str('abhichahiye') AND kind = str('org') AND ($creator = addr(0x…) OR …)`.
+2. **Verified board** (`loadVerifiedDistrict`), scoped by creator at the query level, so the node never returns entities written by anyone else:
+   `app = str('abhichahiye') AND district = str('dhemaji') AND kind = str('vouch') AND ($creator = addr(0xAUTHORITY…) OR …)`, then
+   `app = str('abhichahiye') AND district = str('dhemaji') AND ($creator = addr(0xORG1…) OR $creator = addr(0xORG2…) OR …)`, listing the wallets those live vouches name (up to 40).
+3. **Map viewport** (`loadBox`). Needs and sites both carry coordinates, so one numeric range query on `u64`:
+   `app = str('abhichahiye') AND lat_e6 >= u64(24000000) AND lat_e6 <= u64(29000000) AND lng_e6 >= u64(89000000) AND lng_e6 <= u64(97000000)`
+4. **A forwarded need link** (`loadNeed`, two queries at one block). First the need and everything that names it, then its camp listing, its organisation and any vouch for it by a trusted authority:
+   `$key = key(0xNEED…) OR app = str('abhichahiye') AND need = key(0xNEED…)`
+   `$key = key(0xSITE…) OR app = str('abhichahiye') AND kind = str('org') AND $creator = addr(0xCAMP…) OR app = str('abhichahiye') AND kind = str('vouch') AND org = addr(0xCAMP…) AND ($creator = addr(0xAUTHORITY…))`
+5. **Consoles** ([`src/core/consoles.ts`](../src/core/consoles.ts)). A camp reads everything it owns, `app = str('abhichahiye')` with `ownedBy(wallet)` (`$owner = addr(wallet)`), then `app = str('abhichahiye') AND (need = key(0x…) OR …)` for the pledges and receipts naming its needs. A donor reads its pledges the same way, then their needs, sites and receipts in one OR query. A district office reads `app = str('abhichahiye') AND district = str('dhemaji') AND (kind = str('org') OR kind = str('vouch'))`.
+6. **Duplicate-receipt guard**, before a camp records a delivery: `app = str('abhichahiye') AND kind = str('receipt') AND pledge = key(0x…)` with `createdBy(camp)`.
+7. **Live updates**: `watchEntityEvents` over a WebSocket with no `fromBlock` (a real `eth_subscribe`, not polling). Events are chain-wide and looking an entity up costs a full query, so an event triggers a refresh only if it touches an entity already on screen or comes from a wallet already on screen; anything else is picked up by a refresh every 90 seconds. There is no event when an entity expires, so the UI counts down from `expiresAt` and drops the entity itself.
 
-Pages are 200 entities. All six district queries read one pinned block (`atBlock`), and the client follows cursors by hand at that block, because the SDK's `page.next()` re-queries at the chain head and the node rejects the cursor once the head has moved (friction F8). A single query is capped at 1,000 entities; if the cap is hit the app reports it (`truncated`) instead of showing a partial board as if it were complete. Sorting is local, because the node has no server-side ordering.
+Pages are 200 entities. Later pages, and later queries of the same view, are pinned (`atBlock`) to the block the first response reports: the SDK's `page.next()` re-queries at the head and the node rejects the cursor once the head has moved (F8), and `getBlockNumber()` is cached for two blocks (F10). A query is capped at 1,000 entities, and the app says when the cap is hit (`truncated`) instead of showing a partial board as if it were complete. Sorting is local, because the node has no server-side ordering.
 
 ## Trust rules (all based on the immutable `$creator`, never on a writable attribute)
 
@@ -79,7 +82,7 @@ Implementation: [`src/core/trust.ts`](../src/core/trust.ts), gap arithmetic: [`s
 
 Data on Arkiv is permissionless, so the open board is only as trustworthy as its inputs. A stranger can still create their own camp and needs (they show as unvouched), and can file a plausible-looking pledge that reduces a gap for the hours before its ETA. The need's full quantity and every individual pledge stay visible, and a camp can always see who has promised what. Entities that match a query are limited to 1,000 per query, and the app says when that limit is hit.
 
-The **verified board** closes these gaps for the viewer who wants certainty: because it asks the node only for entities created by wallets a trusted authority vouched for (query 6), spam, impostor camps and hostile pledges cannot reach it, however many of them there are. Its limit is trust itself: it is exactly as good as the authority wallets the viewer chooses to trust, and a vouch lapses after 30 days.
+The **verified board** closes these gaps for the viewer who wants certainty: because it asks the node only for entities created by wallets a trusted authority vouched for (query 2), spam, impostor camps and hostile pledges cannot reach it, however many of them there are. Its limit is trust itself: it is exactly as good as the authority wallets the viewer chooses to trust, and a vouch lapses after 30 days.
 
 ## Building on this data without us
 
@@ -99,10 +102,11 @@ const needs = await client
   .where(eq("app", "abhichahiye"), eq("kind", "need"), eq("district", "dhemaji"), gte("urgency", u64(1)))
   .limit(200)
   .fetch()
-// Forward a need only while it is live: (expiresAt - currentBlock) * 2 seconds are left.
+// Trust a need only if its `site` entity is live and was created by the same wallet (rule 1 above).
+// Forward it only while it is live: (expiresAt - currentBlock) * 2 seconds are left.
 ```
 
-The command-line tool in this repo (`npm run abhi -- gaps dhemaji`) does exactly this and never contacts an AbhiChahiye server.
+The command-line tool in this repo (`npm run abhi -- gaps dhemaji`) reads Arkiv the same way, applies the trust rules, and never contacts an AbhiChahiye server.
 
 ## What stays off Arkiv on purpose
 
