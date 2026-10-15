@@ -9,9 +9,9 @@ import { type Expression, exists, gte, hasType, ne, startsWith } from "@arkiv-ne
 import { ExpirationTime, jsonToPayload } from "@arkiv-network/sdk/utils"
 import { custom, http } from "viem"
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts"
-import { makePublicClient } from "../src/core/arkiv"
+import { makePublicClient, PUBLIC_HTTP } from "../src/core/arkiv"
 
-const client = makePublicClient()
+const client = makePublicClient(process.env.VITE_ARKIV_KEY)
 const upstream = http()({ chain: tiramisu }).request
 const outcomes: boolean[] = []
 
@@ -174,6 +174,40 @@ if (!anchor) throw new Error("no long-lived entity found on chain to anchor the 
   const version = JSON.parse(readFileSync("node_modules/@arkiv-network/sdk/package.json", "utf8")).version as string
   const shown = /"@arkiv-network\/sdk":\s*"\^?(\d+\.\d+\.\d+)"/.exec(readme)?.[1]
   record("F7 README install snippet", shown !== undefined && shown !== version, `README shows ${shown}, installed ${version}`)
+}
+
+// F9: every query, a single-key lookup (what getEntity sends) included, costs 100 units of a small anonymous budget.
+// The cost shows only in response headers; when the budget is gone the node answers 429 with a long Retry-After.
+{
+  const post = (body: object) => fetch(PUBLIC_HTTP, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
+  const query = await post({ jsonrpc: "2.0", id: 1, method: "arkiv_query", params: ["app = str('abhichahiye')", { select: { key: true }, limit: "0x1" }] })
+  if (query.status === 429) {
+    const body = await query.text()
+    record("F9 anonymous query budget", body.includes("ANON_COST_LIMITED"), `anonymous budget exhausted right now: 429 ${body.trim().slice(0, 140)} | retry-after ${query.headers.get("retry-after")} s`)
+  } else {
+    const lookup = await post({ jsonrpc: "2.0", id: 2, method: "arkiv_query", params: [`$key = key(${anchor.key})`, { select: { key: true }, limit: "0x1" }] })
+    const head = await post({ jsonrpc: "2.0", id: 3, method: "eth_blockNumber", params: [] })
+    const cost = (r: Response) => r.headers.get("arkiv-cost") ?? "none"
+    record(
+      "F9 anonymous query budget",
+      cost(query) === "100" && cost(lookup) === "100" && cost(head) === "none",
+      `arkiv_query costs ${cost(query)}, a one-key lookup ${cost(lookup)}, eth_blockNumber ${cost(head)} (headers only; ratelimit: ${query.headers.get("ratelimit")})`,
+    )
+  }
+}
+
+// F10: the Tiramisu chain definition has no blockTime, so viem caches getBlockNumber for 4 s (two blocks).
+{
+  const raw = async () => BigInt(((await (await fetch(PUBLIC_HTTP, { method: "POST", headers: { "content-type": "application/json" }, body: '{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]}' })).json()) as { result: string }).result)
+  const first = await client.getBlockNumber()
+  await new Promise((resolve) => setTimeout(resolve, 3000))
+  const again = await client.getBlockNumber()
+  const head = await raw()
+  record(
+    "F10 cached block number",
+    tiramisu.blockTime === undefined && client.cacheTime === 4000 && again === first && head > again,
+    `chain.blockTime ${tiramisu.blockTime}, client.cacheTime ${client.cacheTime} ms: getBlockNumber() gave ${first}, and ${again} again 3 s later, while the head was ${head}`,
+  )
 }
 
 // F8: the SDK's page.next() fails once the chain head has moved; pinning atBlock for the whole walk works.
