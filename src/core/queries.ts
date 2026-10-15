@@ -1,12 +1,13 @@
 import { NoEntityFoundError } from "@arkiv-network/sdk"
-import { key, u64 } from "@arkiv-network/sdk/attr"
-import { and, eq, gte, lte, type Expression } from "@arkiv-network/sdk/query"
+import { addr, key, u64 } from "@arkiv-network/sdk/attr"
+import { and, eq, gte, lte, or, type Expression } from "@arkiv-network/sdk/query"
 import type { Hex } from "viem"
 import type { PublicClient } from "./arkiv"
 import { type Gap, computeGaps } from "./gaps"
 import { type Box, slug, toE6 } from "./geo"
 import { type Rec, s, toRec } from "./records"
 import { APP, type Item, KIND, type Kind } from "./schema"
+import { trustedOrgs } from "./trust"
 
 const PAGE_SIZE = 200
 const MAX_RESULTS = 1000
@@ -55,11 +56,41 @@ export function needsWhere(f: DistrictFilter): Expression[] {
   return where
 }
 
+export type DistrictData = {
+  block: bigint
+  truncated: boolean
+  needs: Rec[]
+  pledges: Rec[]
+  receipts: Rec[]
+  sites: Rec[]
+  orgs: Rec[]
+  vouches: Rec[]
+  sitesByKey: Map<string, Rec>
+}
+
+type Sets = Record<"needs" | "pledges" | "receipts" | "sites" | "orgs" | "vouches", Fetched>
+const nothing: Fetched = { recs: [], truncated: false }
+const emptySets: Sets = { needs: nothing, pledges: nothing, receipts: nothing, sites: nothing, orgs: nothing, vouches: nothing }
+
+function assemble(block: bigint, sets: Sets): DistrictData {
+  return {
+    block,
+    truncated: Object.values(sets).some((x) => x.truncated),
+    needs: sets.needs.recs,
+    pledges: sets.pledges.recs,
+    receipts: sets.receipts.recs,
+    sites: sets.sites.recs,
+    orgs: sets.orgs.recs,
+    vouches: sets.vouches.recs,
+    sitesByKey: new Map<string, Rec>(sets.sites.recs.map((x) => [x.key, x])),
+  }
+}
+
 // All six queries read the same block, so a need, its pledges and their receipts are always seen consistently.
-export async function loadDistrict(client: PublicClient, f: DistrictFilter) {
+export async function loadDistrict(client: PublicClient, f: DistrictFilter): Promise<DistrictData> {
   const block = await client.getBlockNumber()
   const inDistrict = eq("district", slug(f.district))
-  const sets = await Promise.all([
+  const [needs, pledges, receipts, sites, orgs, vouches] = await Promise.all([
     fetchAll(client, needsWhere(f), {}, block),
     fetchAll(client, [...ofKind("pledge"), inDistrict], {}, block),
     fetchAll(client, [...ofKind("receipt"), inDistrict], {}, block),
@@ -67,18 +98,33 @@ export async function loadDistrict(client: PublicClient, f: DistrictFilter) {
     fetchAll(client, ofKind("org"), {}, block),
     fetchAll(client, [...ofKind("vouch"), inDistrict], {}, block),
   ])
-  const [needs, pledges, receipts, sites, orgs, vouches] = sets
-  return {
-    block,
-    truncated: sets.some((x) => x.truncated),
-    needs: needs.recs,
-    pledges: pledges.recs,
-    receipts: receipts.recs,
-    sites: sites.recs,
-    orgs: orgs.recs,
-    vouches: vouches.recs,
-    sitesByKey: new Map<string, Rec>(sites.recs.map((x) => [x.key, x])),
-  }
+  return assemble(block, { needs, pledges, receipts, sites, orgs, vouches })
+}
+
+const MAX_TRUSTED = 40
+
+// The verified board. Every query is scoped by $creator to wallets that a trusted authority vouched for, so entities
+// written by anyone else, however well-formed and however many, can never reach it.
+export async function loadVerifiedDistrict(client: PublicClient, f: DistrictFilter, authorities: Hex[]): Promise<DistrictData> {
+  const block = await client.getBlockNumber()
+  if (authorities.length === 0) return assemble(block, emptySets)
+  const byCreator = (wallets: Hex[]) => or(wallets.map((w) => eq("$creator", addr(w))))
+  const inDistrict = eq("district", slug(f.district))
+
+  const vouches = await fetchAll(client, [...ofKind("vouch"), inDistrict, byCreator(authorities)], {}, block)
+  const trusted = [...trustedOrgs(vouches.recs, authorities)]
+  const cappedVouches = { ...vouches, truncated: vouches.truncated || trusted.length > MAX_TRUSTED }
+  if (trusted.length === 0) return assemble(block, { ...emptySets, vouches: cappedVouches })
+
+  const creators = byCreator(trusted.slice(0, MAX_TRUSTED))
+  const [needs, pledges, receipts, sites, orgs] = await Promise.all([
+    fetchAll(client, [...needsWhere(f), creators], {}, block),
+    fetchAll(client, [...ofKind("pledge"), inDistrict, creators], {}, block),
+    fetchAll(client, [...ofKind("receipt"), inDistrict, creators], {}, block),
+    fetchAll(client, [...ofKind("site"), inDistrict, creators], {}, block),
+    fetchAll(client, [...ofKind("org"), creators], {}, block),
+  ])
+  return assemble(block, { needs, pledges, receipts, sites, orgs, vouches: cappedVouches })
 }
 
 export function boxWhere(b: Box): Expression[] {

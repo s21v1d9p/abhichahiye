@@ -59,7 +59,8 @@ All are plain `arkiv_query` predicates (shown as the exact string the SDK sends)
    `… AND kind = str('pledge') AND district = str('dhemaji')` (also `receipt`, `site`, `vouch`); `org` is read without a district filter.
 4. **A wallet's own entities**: any of the above with the SDK's `ownedBy(wallet)` (the shorthand for `$owner = addr(wallet)`).
 5. **Duplicate-receipt guard**: `app = str('abhichahiye') AND kind = str('receipt') AND pledge = key(0x…)` with `createdBy(camp)` (`$creator = addr(camp)`).
-6. **Live updates**: `watchEntityEvents` over a WebSocket transport with no `fromBlock` (a real `eth_subscribe`, not polling). Events are chain-wide, so each created/changed key is fetched and kept only if `app = abhichahiye`. There is no event when an entity expires, so the UI counts down from `expiresAt` and drops the entity itself.
+6. **Verified board** (`loadVerifiedDistrict`): scoped by creator at the query level, so the node never even returns entities from other wallets. First the vouches, `app = str('abhichahiye') AND kind = str('vouch') AND district = str('dhemaji') AND ($creator = addr(0xAUTHORITY1…) OR $creator = addr(0xAUTHORITY2…))`; then every other query is the same as above with one more clause, `AND ($creator = addr(0xORG1…) OR $creator = addr(0xORG2…) OR …)`, listing the wallets those live vouches name (up to 40 per district).
+7. **Live updates**: `watchEntityEvents` over a WebSocket transport with no `fromBlock` (a real `eth_subscribe`, not polling). Events are chain-wide, so each created/changed key is fetched and kept only if `app = abhichahiye`. There is no event when an entity expires, so the UI counts down from `expiresAt` and drops the entity itself.
 
 Pages are 200 entities. All six district queries read one pinned block (`atBlock`), and the client follows cursors by hand at that block, because the SDK's `page.next()` re-queries at the chain head and the node rejects the cursor once the head has moved (friction F8). A single query is capped at 1,000 entities; if the cap is hit the app reports it (`truncated`) instead of showing a partial board as if it were complete. Sorting is local, because the node has no server-side ordering.
 
@@ -77,6 +78,8 @@ Implementation: [`src/core/trust.ts`](../src/core/trust.ts), gap arithmetic: [`s
 ### What these rules do not stop
 
 Data on Arkiv is permissionless, so the open board is only as trustworthy as its inputs. A stranger can still create their own camp and needs (they show as unvouched), and can file a plausible-looking pledge that reduces a gap for the hours before its ETA. The need's full quantity and every individual pledge stay visible, and a camp can always see who has promised what. Entities that match a query are limited to 1,000 per query, and the app says when that limit is hit.
+
+The **verified board** closes these gaps for the viewer who wants certainty: because it asks the node only for entities created by wallets a trusted authority vouched for (query 6), spam, impostor camps and hostile pledges cannot reach it, however many of them there are. Its limit is trust itself: it is exactly as good as the authority wallets the viewer chooses to trust, and a vouch lapses after 30 days.
 
 ## Building on this data without us
 
