@@ -8,9 +8,9 @@ Tracks: Best Indian Use Case · Censorship Resistance · Open Source · Security
 
 Flood relief in India keeps failing the same way: many groups, no shared, *current* picture of what each camp still needs.
 
-- Assam floods, Aug 2026: three relief vehicles converged on one area carrying rice and pulses that people already had; they needed clothes — "there was no coordination at all" (Hindustan Times, 8 Aug 2026). "Multiple groups sometimes converged on the same locations, while other affected areas remained underserved" (Assam Tribune, 12 Aug 2026). ~2,000 relief vehicles/day left plastic-waste piles in Sivasagar and Charaideo (Assam Tribune, 11 Aug 2026).
-- Scale, Q3 2026: Bihar 50.49 lakh affected (NIE, 23 Sep); Odisha 8.64 lakh affected, >1 lakh in >500 relief centres (DD News 4 Aug, HT 28 Sep); Kerala >27,000 in ~460 camps (IE, 5 Aug).
-- Precedents: Chennai 2015 aid "piling up" in warehouses (IE, 10 Dec 2015); Kerala 2018 keralarescue.in had no way to mark requests "done" (GitHub issue biswaz/rescuekerala#18, still open) and forwarded helpline lists that no one answered (Caravan, 6 Oct 2018); Covid 2021 "verified leads" were stale within hours (Newslaundry, 7 May 2021).
+- Assam floods, Aug 2026: three relief vehicles headed to one area carrying mainly rice and pulses while people there needed clothes — "there was no coordination at all" (Hindustan Times, 8 Aug 2026). "Multiple groups sometimes converged on the same locations, while other affected areas remained underserved" (Assam Tribune, 12 Aug 2026). Locals estimated ~2,000 relief vehicles/day arriving in some of the worst-hit areas; plastic waste piled up in villages of Sivasagar and Charaideo (Assam Tribune, 11 Aug 2026).
+- Scale, Q3 2026: Bihar 50.49 lakh affected (NIE, 23 Sep); Odisha 8.64 lakh affected in early August (DD News, 4 Aug) and, in a separate late-September flood, >1 lakh in >500 relief centres (DD News, 28 Sep); Kerala >27,000 in ~460 camps (IE, 5 Aug).
+- Precedents: Chennai 2015 aid "piling up" in warehouses (IE, 10 Dec 2015); Kerala 2018 keralarescue.in had no way to mark requests "done" (GitHub issue biswaz/rescuekerala#18, still open) and forwarded helpline lists that no one answered (Caravan, 6 Oct 2018); Covid 2021 crowd-sourced resource information "often becomes obsolete within hours" (Newslaundry, 20 Apr 2021).
 - Existing 2026 tools (banpani.org, Helpmonk, Jal Raksha) are single-operator needs maps with no expiry, no pledge tracking and no verifiable authorship; banpani.org returned HTTP 522 on 14 Oct 2026.
 
 Users: relief-camp coordinators (government and NGO), relief groups and donors deciding what to load into the next vehicle, district disaster-management staff, volunteers forwarding requests on WhatsApp.
@@ -70,7 +70,7 @@ Wallets: per-role burner keys generated in the browser and kept in localStorage 
 ## 8. Error handling
 
 - RPC failure or HTTP 429: show "can't reach Arkiv — data not refreshed" with last-refresh time; never show an empty board as "no needs".
-- Extension that would not move expiry later: compute target as `max(now + ttl, current + 2 blocks)`.
+- Extension that would not move expiry later: compute target as `max(now + lifetime, current + 2 blocks)`.
 - Drip failure: show the Arkiv faucet link.
 
 ## 9. Testing

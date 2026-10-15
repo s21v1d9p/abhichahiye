@@ -144,7 +144,7 @@ export type Urgency = 1 | 2 | 3
 const HOUR = 3600
 const DAY = 24 * HOUR
 
-export const TTL = {
+export const LIFETIME = {
   org: 90 * DAY,
   site: 7 * DAY,
   need: { 3: 6 * HOUR, 2: 12 * HOUR, 1: 24 * HOUR } as Record<Urgency, number>,
@@ -406,16 +406,16 @@ describe("expiry policy", () => {
     expect(secondsLeft(1100n, 1000n)).toBe(200)
     expect(secondsLeft(900n, 1000n)).toBe(0)
   })
-  it("renews to ttl from now when that is later than the current expiry", () => {
+  it("renews to lifetime from now when that is later than the current expiry", () => {
     expect(renewalTarget(1500n, 1000n, 6 * 3600)).toBe(1000n + 10800n)
   })
   it("never produces a target that is not strictly later (engine would revert)", () => {
     expect(renewalTarget(50_000n, 1000n, 3600)).toBe(50_001n)
   })
   it("only renews a lease once it has meaningfully aged", () => {
-    const ttl = 90 * 86400
-    expect(needsLeaseRenewal(1000n + blocksFor(ttl), 1000n, ttl)).toBe(false)
-    expect(needsLeaseRenewal(1000n + blocksFor(ttl - 7200), 1000n, ttl)).toBe(true)
+    const lifetime = 90 * 86400
+    expect(needsLeaseRenewal(1000n + blocksFor(lifetime), 1000n, lifetime)).toBe(false)
+    expect(needsLeaseRenewal(1000n + blocksFor(lifetime - 7200), 1000n, lifetime)).toBe(true)
   })
 })
 ```
@@ -424,7 +424,7 @@ describe("expiry policy", () => {
 **Step 3:** `src/core/expiry.ts`:
 ```ts
 import { ExpirationTime } from "@arkiv-network/sdk/utils"
-import { TTL, type Urgency } from "./schema"
+import { LIFETIME, type Urgency } from "./schema"
 
 export const BLOCK_SECONDS = 2
 
@@ -446,8 +446,8 @@ export function needsLeaseRenewal(currentExpiresAt: bigint, currentBlock: bigint
   return secondsLeft(currentExpiresAt, currentBlock) < ttlSeconds - slackSeconds
 }
 
-export const needLifetime = (u: Urgency) => ExpirationTime.fromSeconds(TTL.need[u])
-export const pledgeExpiry = (etaUnix: number) => ExpirationTime.atDate(new Date((etaUnix + TTL.pledgeGrace) * 1000))
+export const needLifetime = (u: Urgency) => ExpirationTime.fromSeconds(LIFETIME.need[u])
+export const pledgeExpiry = (etaUnix: number) => ExpirationTime.atDate(new Date((etaUnix + LIFETIME.pledgeGrace) * 1000))
 ```
 **Step 4:** PASS. **Step 5: Commit** `feat(core): expiry policy (lifetimes, renewal targets, lease ageing)`.
 
@@ -691,32 +691,32 @@ import type { PublicClient, WalletClient } from "./arkiv"
 import { assertNoPhone, needAttrs, orgAttrs, pledgeAttrs, receiptAttrs, siteAttrs, vouchAttrs } from "./attrs"
 import { needLifetime, needsLeaseRenewal, pledgeExpiry, renewalTarget } from "./expiry"
 import { n, type Rec, s } from "./records"
-import { type Item, type OrgType, type SiteType, TTL, type Urgency } from "./schema"
+import { type Item, type OrgType, type SiteType, LIFETIME, type Urgency } from "./schema"
 
 const json = (o: object) => ({ payload: jsonToPayload(o), contentType: "application/json" as const })
 
 async function leaseExtensions(pub: PublicClient, currentBlock: bigint, leases: Array<[Hex | undefined, number]>) {
   const out: { entityKey: Hex; expires: ReturnType<typeof ExpirationTime.atBlock> }[] = []
-  for (const [k, ttl] of leases) {
+  for (const [k, lifetime] of leases) {
     if (!k) continue
     const e = await pub.getEntity(k)
-    if (e.expiresAt !== undefined && needsLeaseRenewal(e.expiresAt, currentBlock, ttl)) {
-      out.push({ entityKey: k, expires: ExpirationTime.atBlock(renewalTarget(e.expiresAt, currentBlock, ttl)) })
+    if (e.expiresAt !== undefined && needsLeaseRenewal(e.expiresAt, currentBlock, lifetime)) {
+      out.push({ entityKey: k, expires: ExpirationTime.atBlock(renewalTarget(e.expiresAt, currentBlock, lifetime)) })
     }
   }
   return out
 }
 
 export const registerOrg = (w: WalletClient, o: { name: string; helpline?: string; orgType: OrgType; state: string; district: string }) =>
-  w.createEntity({ ...json({ name: o.name, helpline: o.helpline ?? "" }), attributes: orgAttrs(o), expires: ExpirationTime.fromSeconds(TTL.org) })
+  w.createEntity({ ...json({ name: o.name, helpline: o.helpline ?? "" }), attributes: orgAttrs(o), expires: ExpirationTime.fromSeconds(LIFETIME.org) })
 
 export const createSite = (w: WalletClient, x: { name: string; landmark?: string; siteType: SiteType; state: string; district: string; lat: number; lng: number; people: number }) =>
-  w.createEntity({ ...json({ name: x.name, landmark: x.landmark ?? "" }), attributes: siteAttrs(x), expires: ExpirationTime.fromSeconds(TTL.site) })
+  w.createEntity({ ...json({ name: x.name, landmark: x.landmark ?? "" }), attributes: siteAttrs(x), expires: ExpirationTime.fromSeconds(LIFETIME.site) })
 
 export async function postNeed(w: WalletClient, pub: PublicClient, x: { site: Rec; orgKey?: Hex; item: Item; qty: number; urgency: Urgency; note?: string; lifetimeSeconds?: number }) {
   if (x.note) assertNoPhone(x.note)
   const { currentBlock } = await pub.getBlockTiming()
-  const extensions = await leaseExtensions(pub, currentBlock, [[x.site.key, TTL.site], [x.orgKey, TTL.org]])
+  const extensions = await leaseExtensions(pub, currentBlock, [[x.site.key, LIFETIME.site], [x.orgKey, LIFETIME.org]])
   const lat = Number(n(x.site, "lat_e6")) / 1e6, lng = Number(n(x.site, "lng_e6")) / 1e6
   return w.executeBatch({
     creates: [{
@@ -730,11 +730,11 @@ export async function postNeed(w: WalletClient, pub: PublicClient, x: { site: Re
 
 export async function reconfirmNeed(w: WalletClient, pub: PublicClient, need: Rec, orgKey?: Hex) {
   const { currentBlock } = await pub.getBlockTiming()
-  const ttl = TTL.need[Number(n(need, "urgency")) as Urgency]
+  const lifetime = LIFETIME.need[Number(n(need, "urgency")) as Urgency]
   return w.executeBatch({
     extensions: [
-      { entityKey: need.key, expires: ExpirationTime.atBlock(renewalTarget(need.expiresAt, currentBlock, ttl)) },
-      ...(await leaseExtensions(pub, currentBlock, [[s(need, "site") as Hex, TTL.site], [orgKey, TTL.org]])),
+      { entityKey: need.key, expires: ExpirationTime.atBlock(renewalTarget(need.expiresAt, currentBlock, lifetime)) },
+      ...(await leaseExtensions(pub, currentBlock, [[s(need, "site") as Hex, LIFETIME.site], [orgKey, LIFETIME.org]])),
     ],
   })
 }
@@ -748,7 +748,7 @@ export async function pledgeTo(w: WalletClient, pub: PublicClient, x: { need: Re
       attributes: pledgeAttrs({ need: x.need.key, site: s(x.need, "site") as Hex, district: s(x.need, "district"), item: s(x.need, "item") as Item, qty: x.qty, eta: x.etaUnix }),
       expires: pledgeExpiry(x.etaUnix),
     }],
-    extensions: await leaseExtensions(pub, currentBlock, [[x.orgKey, TTL.org]]),
+    extensions: await leaseExtensions(pub, currentBlock, [[x.orgKey, LIFETIME.org]]),
   })
 }
 
@@ -759,7 +759,7 @@ export async function recordReceipt(w: WalletClient, x: { pledge: Rec; need: Rec
     payload: new Uint8Array(),
     contentType: "application/octet-stream",
     attributes: receiptAttrs({ pledge: x.pledge.key, need: x.need.key, site: s(x.need, "site") as Hex, district: s(x.need, "district"), qty: Number(delivered), pledger: x.pledge.creator }),
-    expires: ExpirationTime.fromSeconds(TTL.receipt),
+    expires: ExpirationTime.fromSeconds(LIFETIME.receipt),
     flags: { readonly: true },
   }
   return remaining > 0n
@@ -768,7 +768,7 @@ export async function recordReceipt(w: WalletClient, x: { pledge: Rec; need: Rec
 }
 
 export const vouchFor = (w: WalletClient, x: { org: Address; district: string }) =>
-  w.createEntity({ payload: new Uint8Array(), contentType: "application/octet-stream", attributes: vouchAttrs(x), expires: ExpirationTime.fromSeconds(TTL.vouch), flags: { readonly: true } })
+  w.createEntity({ payload: new Uint8Array(), contentType: "application/octet-stream", attributes: vouchAttrs(x), expires: ExpirationTime.fromSeconds(LIFETIME.vouch), flags: { readonly: true } })
 
 export const cancelPledge = (w: WalletClient, pledgeKey: Hex) => w.deleteEntity({ entityKey: pledgeKey })
 ```
