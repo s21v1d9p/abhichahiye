@@ -34,7 +34,8 @@ export type Urgency = 1 | 2 | 3
 const HOUR = 3600
 const DAY = 24 * HOUR
 
-export const TTL = {
+// Entity Expiration per kind, in seconds: how long each Arkiv entity lives before it lapses unless extended.
+export const LIFETIME = {
   org: 90 * DAY,
   site: 7 * DAY,
   need: { 3: 6 * HOUR, 2: 12 * HOUR, 1: 24 * HOUR } as Record<Urgency, number>,

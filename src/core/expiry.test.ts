@@ -12,7 +12,7 @@ describe("expiry policy", () => {
     expect(secondsLeft(900n, 1000n)).toBe(0)
   })
 
-  it("renews to ttl from now when that is later than the current expiry", () => {
+  it("renews to a full lifetime from now when that is later than the current expiry", () => {
     expect(renewalTarget(1500n, 1000n, 6 * 3600)).toBe(1000n + 10800n)
   })
 
@@ -21,8 +21,8 @@ describe("expiry policy", () => {
   })
 
   it("only renews a lease once it has meaningfully aged", () => {
-    const ttl = 90 * 86400
-    expect(needsLeaseRenewal(1000n + blocksFor(ttl), 1000n, ttl)).toBe(false)
-    expect(needsLeaseRenewal(1000n + blocksFor(ttl - 7200), 1000n, ttl)).toBe(true)
+    const lifetime = 90 * 86400
+    expect(needsLeaseRenewal(1000n + blocksFor(lifetime), 1000n, lifetime)).toBe(false)
+    expect(needsLeaseRenewal(1000n + blocksFor(lifetime - 7200), 1000n, lifetime)).toBe(true)
   })
 })
