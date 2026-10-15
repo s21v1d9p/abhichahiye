@@ -9,6 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
     "seed": "tsx --env-file=.env scripts/seed.ts",
+    "friction": "tsx scripts/friction-repro.ts",
     "abhi": "tsx cli/abhi.ts"
   },
   "dependencies": {
