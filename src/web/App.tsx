@@ -1,5 +1,6 @@
 import { Link, Route, Switch, useRoute } from "wouter"
 import { EXPLORER } from "../core/arkiv"
+import { ErrorBoundary } from "./components/ErrorBoundary"
 import { BackendProvider, useBackend } from "./lib/backend"
 import { REPO_URL } from "./lib/config"
 import { BoardProvider } from "./lib/store"
@@ -50,8 +51,8 @@ function Shell({ children }: { children: React.ReactNode }) {
       <main>{children}</main>
       <footer className="footer">
         <p>
-          Built on <a href="https://arkiv.network">Arkiv</a>, the Web3 database, on the Tiramisu testnet. There is no AbhiChahiye server: this page, the command line and any app you build read the same Arkiv entities. All demo
-          data is synthetic and labelled (demo).
+          Built on <a href="https://arkiv.network">Arkiv</a>, the Web3 database, on the Tiramisu testnet. AbhiChahiye keeps no database of its own: this page, the command line and any app you build read the same Arkiv
+          entities. Two small helpers on this site only hand out test GLM and pass read queries along when the public endpoint is busy. All demo data is synthetic and labelled (demo).
         </p>
         <p className="footer__links">
           <a href={`${REPO_URL}/blob/main/arkiv/schema.md`}>Data contract</a>
@@ -66,26 +67,28 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <BackendProvider>
-      <BoardProvider>
-        <Shell>
-          <Switch>
-            <Route path="/" component={Board} />
-            <Route path="/n/:key">{(params) => <NeedPage needKey={params.key} />}</Route>
-            <Route path="/camp" component={Camp} />
-            <Route path="/donate" component={Donor} />
-            <Route path="/authority" component={Authority} />
-            <Route>
-              <section className="page">
-                <h1 className="page__title">Page not found</h1>
-                <Link href="/" className="btn">
-                  Back to the board
-                </Link>
-              </section>
-            </Route>
-          </Switch>
-        </Shell>
-      </BoardProvider>
-    </BackendProvider>
+    <ErrorBoundary>
+      <BackendProvider>
+        <BoardProvider>
+          <Shell>
+            <Switch>
+              <Route path="/" component={Board} />
+              <Route path="/n/:key">{(params) => <NeedPage needKey={params.key} />}</Route>
+              <Route path="/camp" component={Camp} />
+              <Route path="/donate" component={Donor} />
+              <Route path="/authority" component={Authority} />
+              <Route>
+                <section className="page">
+                  <h1 className="page__title">Page not found</h1>
+                  <Link href="/" className="btn">
+                    Back to the board
+                  </Link>
+                </section>
+              </Route>
+            </Switch>
+          </Shell>
+        </BoardProvider>
+      </BackendProvider>
+    </ErrorBoundary>
   )
 }

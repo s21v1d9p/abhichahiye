@@ -38,20 +38,22 @@ export function createDrip(deps: DripDeps) {
     if (typeof address !== "string" || !isAddress(address)) {
       return { status: 400, body: { error: 'Send a JSON body like {"address": "0x…"}' } }
     }
+    // Counted before anything is awaited, so simultaneous requests from one network all see each other.
     const at = now()
     const hits = (recent.get(ip) ?? []).filter((t) => at - t < WINDOW_MS)
     if (hits.length >= PER_WINDOW) {
       return { status: 429, body: { error: "Too many top-ups from this network. Try again in a few minutes." } }
     }
+    if (recent.size > MAX_TRACKED) recent.clear()
+    recent.set(ip, [...hits, at])
     const to = getAddress(address)
-    if ((await deps.balanceOf(to)) >= deps.skipAbove) return { status: 200, body: { skipped: "already funded" } }
 
+    // The balance is checked inside the queue, after any transfer already on its way to this address has landed.
     return serially(async () => {
+      if ((await deps.balanceOf(to)) >= deps.skipAbove) return { status: 200, body: { skipped: "already funded" } }
       if ((await deps.balanceOf(deps.dripAddress)) < deps.amount * 2n) {
         return { status: 503, body: { error: "The test-GLM drip is empty. Claim from https://hub.arkiv.network/faucet instead." } }
       }
-      if (recent.size > MAX_TRACKED) recent.clear()
-      recent.set(ip, [...hits, at])
       return { status: 200, body: { txHash: await deps.send(to, deps.amount) } }
     })
   }

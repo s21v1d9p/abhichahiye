@@ -29,10 +29,12 @@ export function toRec(e: EntityLike): Rec {
   for (const [name, v] of Object.entries(e.attributes ?? {})) {
     attrs[name] = typeof v.value === "bigint" ? v.value : String(v.value).toLowerCase()
   }
+  // Anyone can write any payload. Only a JSON object is kept, so readers can always do `payload.name`.
   let payload: Record<string, unknown> = {}
   if (e.payload && e.payload.length > 0) {
     try {
-      payload = JSON.parse(new TextDecoder().decode(e.payload))
+      const parsed: unknown = JSON.parse(new TextDecoder().decode(e.payload))
+      if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) payload = parsed as Record<string, unknown>
     } catch {
       payload = {}
     }

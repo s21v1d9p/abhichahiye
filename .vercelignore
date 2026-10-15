@@ -1,0 +1,7 @@
+.env
+.env.*
+.seed-wallets.json
+.vercel
+node_modules
+dist
+*.log

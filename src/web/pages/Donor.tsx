@@ -141,13 +141,13 @@ export default function Donor() {
   const wallet = useBrowserWallet()
   const needKey = new URLSearchParams(useSearch()).get("need") as Hex | null
   const [target, setTarget] = useState<Target>()
-  const [pledges, setPledges] = useState<PledgeView[]>()
+  const [pledges, setPledges] = useState<{ views: PledgeView[]; truncated: boolean }>()
   const [loadError, setLoadError] = useState<string>()
 
   const load = useCallback(async () => {
     try {
       const [view, mine] = await Promise.all([needKey ? loadNeed(backend.pub, needKey, undefined, backend.authorities) : undefined, loadPledges(backend.pub, wallet.address)])
-      setPledges(mine.views)
+      setPledges({ views: mine.views, truncated: mine.truncated })
       if (view) {
         setTarget({ view, vouched: view.state === "live" && view.vouched, at: Date.now() })
       } else {
@@ -210,13 +210,14 @@ export default function Donor() {
       )}
 
       <h2 className="console__h2">Your pledges</h2>
+      {pledges?.truncated && <p className="note note--warn">Some of your pledges or their receipts were cut off by the result limit, so this list may be incomplete.</p>}
       {!pledges ? (
         <p className="verdict__checking">Reading your pledges…</p>
-      ) : pledges.length === 0 ? (
+      ) : pledges.views.length === 0 ? (
         <p className="note">No live pledges from this wallet.</p>
       ) : (
         <ul className="pledge-list">
-          {pledges.map((p) => (
+          {pledges.views.map((p) => (
             <PledgeRow
               key={p.pledge.key}
               view={p}

@@ -412,6 +412,7 @@ export default function Camp() {
           </ol>
 
           <h2 className="console__h2">Your live needs</h2>
+          {view.truncated && <p className="note note--warn">Some of your entities or their pledges were cut off by the result limit, so this list and its counts may be incomplete.</p>}
           {view.needs.length === 0 ? (
             <p className="note">Nothing is live. Needs you post appear here with the time left before they lapse.</p>
           ) : (

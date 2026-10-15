@@ -129,6 +129,7 @@ function Live({ loaded, needKey }: { loaded: Loaded; needKey: string }) {
       </div>
       <GapMeter qty={view.gap.qty} pledged={view.gap.pledged} />
       {typeof view.need.payload.note === "string" && view.need.payload.note && <p className="tag__note">“{view.need.payload.note}”</p>}
+      {view.truncated && <p className="note note--warn">More entities name this need than one read returns, so the promised count may be incomplete.</p>}
 
       <div className="verdict__clock">
         <Countdown seconds={seconds} className="countdown--xl" />

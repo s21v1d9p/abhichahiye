@@ -8,6 +8,7 @@ import { type Box, slug, toE6 } from "./geo"
 import { n, type Rec, s, toRec } from "./records"
 import { APP, type Item, KIND, type Kind } from "./schema"
 import { isAuthenticNeed, trustedOrgs } from "./trust"
+import { isWellFormed } from "./shape"
 
 // Every arkiv_query costs 100 units of the caller's budget however many entities it returns, and getEntity is a query
 // too (see arkiv/friction.md). So each view is built from as few queries as possible: one for a whole district, one
@@ -60,12 +61,10 @@ export const byCreator = (wallets: readonly string[]) => or(wallets.map((w) => e
 
 export type ByKind = Record<Kind, Rec[]>
 
+// Only well-formed entities of a known kind reach a view (see shape.ts).
 export function byKind(recs: Rec[]): ByKind {
   const out: ByKind = { org: [], site: [], need: [], pledge: [], receipt: [], vouch: [] }
-  for (const r of recs) {
-    const kind = s(r, "kind") as Kind
-    if (kind in out) out[kind].push(r)
-  }
+  for (const r of recs) if (isWellFormed(r)) out[s(r, "kind") as Kind].push(r)
   return out
 }
 
@@ -159,8 +158,9 @@ export async function loadBox(client: PublicClient, b: Box) {
   return { block: all.block, truncated: all.truncated, needs: k.need.filter((x) => isAuthenticNeed(x, sitesByKey)), sites: k.site, sitesByKey }
 }
 
-export async function myEntities(client: PublicClient, kind: Kind, owner: Hex): Promise<Rec[]> {
-  return (await fetchAll(client, ofKind(kind), { ownedBy: owner })).recs
+// Ownership can be handed to any wallet without its consent; the creator cannot be faked. So "mine" means "I created it".
+export async function myEntities(client: PublicClient, kind: Kind, wallet: Hex): Promise<Rec[]> {
+  return (await fetchAll(client, ofKind(kind), { createdBy: wallet })).recs
 }
 
 export const toQueryString = (where: Expression[]): string => and(where).toString()
@@ -198,7 +198,7 @@ export async function isVouched(client: PublicClient, org: Hex, authorities: Hex
 }
 
 export type NeedView =
-  | { state: "live"; block: bigint; need: Rec; site: Rec; gap: Gap; orgName: string; vouched: boolean }
+  | { state: "live"; block: bigint; need: Rec; site: Rec; gap: Gap; orgName: string; vouched: boolean; truncated: boolean }
   | { state: "gone" }
   | { state: "foreign" }
   | { state: "orphan"; need: Rec }
@@ -207,8 +207,8 @@ export type NeedView =
 const KEY = /^0x[0-9a-fA-F]{64}$/
 
 // What a forwarded need link should say: a live need with its current gap, or why nobody should act on it.
-// gone = expired, deleted or never existed; foreign = another app's entity; orphan = its camp listing has expired;
-// forged = written by a different wallet than the camp listing's creator. Two queries, both at one block.
+// gone = expired, deleted or never existed; foreign = not a well-formed AbhiChahiye need; orphan = its camp listing has
+// expired; forged = written by a different wallet than the camp listing's creator. Two queries, both at one block.
 export async function loadNeed(client: PublicClient, needKey: Hex, nowUnix = Math.floor(Date.now() / 1000), authorities: Hex[] = []): Promise<NeedView> {
   if (!KEY.test(needKey)) return { state: "gone" }
   const k = needKey.toLowerCase() as Hex
@@ -216,21 +216,24 @@ export async function loadNeed(client: PublicClient, needKey: Hex, nowUnix = Mat
   // The need itself, and every pledge and receipt that names it.
   const first = await fetchAll(client, [or(eq("$key", key(k)), and(app, eq("need", key(k))))])
   const block = first.block
-  const need = first.recs.find((r) => r.key === k)
+  // Anyone can write entities that name this need. If they push the need itself out of the result, read it by key.
+  const need = first.recs.find((r) => r.key === k) ?? (first.truncated ? await liveRec(client, k) : undefined)
   if (!need) return { state: "gone" }
-  if (s(need, "app") !== APP || s(need, "kind") !== KIND.need) return { state: "foreign" }
-  const siteKey = s(need, "site").toLowerCase()
-  if (!KEY.test(siteKey)) return { state: "orphan", need }
+  if (!isWellFormed(need) || s(need, "kind") !== KIND.need) return { state: "foreign" }
+  const siteKey = s(need, "site")
 
   // Its camp listing, the organisation that confirmed it, and any vouch for that organisation by a trusted authority.
   const vouch = authorities.length > 0 ? [and(app, eq("kind", KIND.vouch), eq("org", addr(need.creator)), byCreator(authorities.slice(0, MAX_OR)))] : []
   const second = await fetchAll(client, [or(eq("$key", key(siteKey as Hex)), and(app, eq("kind", KIND.org), eq("$creator", addr(need.creator))), ...vouch)], {}, block)
-  const site = second.recs.find((r) => r.key === siteKey && s(r, "app") === APP && s(r, "kind") === KIND.site)
+  const site = second.recs.find((r) => r.key === siteKey && isWellFormed(r) && s(r, "kind") === KIND.site)
   if (!site) return { state: "orphan", need }
   if (site.creator !== need.creator) return { state: "forged", need }
 
   const named = byKind(first.recs)
-  const receipts = named.receipt.filter((r) => r.creator === need.creator)
+  // Only the camp's own receipts settle a pledge. If junk crowded them out of the result, ask for them by creator.
+  const receipts = first.truncated
+    ? (await fetchAll(client, [...ofKind("receipt"), eq("need", key(k))], { createdBy: need.creator }, block)).recs.filter(isWellFormed)
+    : named.receipt.filter((r) => r.creator === need.creator)
   const [gap] = computeGaps([need], named.pledge, receipts, new Map([[site.key, site]]), { nowUnix, block })
   if (!gap) return { state: "forged", need }
   const about = byKind(second.recs)
@@ -242,5 +245,6 @@ export async function loadNeed(client: PublicClient, needKey: Hex, nowUnix = Mat
     gap,
     orgName: String(about.org.find((o) => o.creator === need.creator)?.payload.name ?? ""),
     vouched: trustedOrgs(about.vouch, authorities).has(need.creator as Hex),
+    truncated: first.truncated || second.truncated,
   }
 }

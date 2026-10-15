@@ -15,7 +15,9 @@ function deps(overrides: Partial<DripDeps> = {}, balances: Record<string, bigint
     skipAbove: AMOUNT / 2n,
     balanceOf: async (address) => balances[address.toLowerCase()] ?? (address === DRIP ? 10n ** 19n : 0n),
     send: async (to, value) => {
+      await new Promise((resolve) => setTimeout(resolve, 2))
       sent.push({ to, value })
+      balances[to.toLowerCase()] = (balances[to.toLowerCase()] ?? 0n) + value
       return `0x${sent.length.toString(16).padStart(64, "0")}` as Hex
     },
     now: () => clock,
@@ -94,5 +96,23 @@ describe("drip", () => {
     const drip = createDrip(d)
     await expect(drip({ address: ALICE }, "ip")).rejects.toThrow(/nonce/)
     expect((await drip({ address: ALICE }, "ip")).status).toBe(200)
+  })
+
+  it("holds the per-network limit even when fifty requests arrive at once", async () => {
+    const { deps: d, sent } = deps()
+    const drip = createDrip(d)
+    const wallet = (i: number) => `0x${(i + 1).toString(16).padStart(40, "0")}`
+    const replies = await Promise.all(Array.from({ length: 50 }, (_, i) => drip({ address: wallet(i) }, "1.2.3.4")))
+    expect(replies.filter((r) => r.status === 200)).toHaveLength(5)
+    expect(replies.filter((r) => r.status === 429)).toHaveLength(45)
+    expect(sent).toHaveLength(5)
+  })
+
+  it("funds an address once when it is requested many times at once", async () => {
+    const { deps: d, sent } = deps()
+    const drip = createDrip(d)
+    const replies = await Promise.all(Array.from({ length: 10 }, (_, i) => drip({ address: ALICE }, `ip${i}`)))
+    expect(sent).toHaveLength(1)
+    expect(replies.filter((r) => r.body.skipped === "already funded")).toHaveLength(9)
   })
 })

@@ -158,8 +158,8 @@ export function createMemChain(options: MemChainOptions = {}) {
   const nextTx = () => keccak256(stringToHex(`tx:${counter++}`))
 
   function execute(sender: Address, batch: ExecuteBatchParameters) {
-    const { creates = [], patches = [], deletes = [], extensions = [] } = batch
-    if (creates.length + patches.length + deletes.length + extensions.length === 0) {
+    const { creates = [], patches = [], deletes = [], extensions = [], ownershipChanges = [] } = batch
+    if (creates.length + patches.length + deletes.length + extensions.length + ownershipChanges.length === 0) {
       throw new EntityMutationError("No operations to perform")
     }
     const head = block()
@@ -249,6 +249,14 @@ export function createMemChain(options: MemChainOptions = {}) {
         if (target < e.expiresAt) throw revert("ExpiryNotExtended", e.key)
         working.set(e.key, { ...e, expiresAt: target, updatedAt: head })
         events.push({ type: "ExpiryExtended", entityKey: e.key, owner: e.owner, expiresAt: target })
+      }
+
+      // A one-sided hand-over: the new owner is never asked. This is why readers trust $creator, not $owner.
+      for (const item of ownershipChanges) {
+        const e = liveEntity(item.entityKey)
+        ownedBySender(e)
+        working.set(e.key, { ...e, owner: item.newOwner, updatedAt: head })
+        events.push({ type: "OwnershipTransferred", entityKey: e.key, previousOwner: e.owner, newOwner: item.newOwner })
       }
     } catch (error) {
       if (error instanceof Revert) {
@@ -388,7 +396,7 @@ export function createMemChain(options: MemChainOptions = {}) {
         patchedEntities: (data.patches ?? []).map((p) => p.entityKey),
         deletedEntities: (data.deletes ?? []).map((d) => d.entityKey),
         extendedEntities: (data.extensions ?? []).map((x) => x.entityKey),
-        ownershipChanges: [] as Hex[],
+        ownershipChanges: (data.ownershipChanges ?? []).map((o) => o.entityKey),
       }
     }
     const client = {
@@ -411,6 +419,10 @@ export function createMemChain(options: MemChainOptions = {}) {
         const { txHash } = execute(account.address, { extensions: [data] })
         return { entityKey: data.entityKey, txHash, expiresAt: (store.get(data.entityKey) as Stored).expiresAt }
       },
+      changeOwnership: async (data: NonNullable<ExecuteBatchParameters["ownershipChanges"]>[number]) => ({
+        entityKey: data.entityKey,
+        txHash: execute(account.address, { ownershipChanges: [data] }).txHash,
+      }),
       getBalance: async () => 10n ** 21n,
     }
     return client as unknown as WalletClient
