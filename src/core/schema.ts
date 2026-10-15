@@ -40,6 +40,7 @@ export const LIFETIME = {
   site: 7 * DAY,
   need: { 3: 6 * HOUR, 2: 12 * HOUR, 1: 24 * HOUR } as Record<Urgency, number>,
   pledgeGrace: 2 * HOUR,
+  pledgeMaxHorizon: 48 * HOUR,
   receipt: 30 * DAY,
   vouch: 30 * DAY,
 } as const

@@ -1,4 +1,4 @@
-import { u64 } from "@arkiv-network/sdk/attr"
+import { key, u64 } from "@arkiv-network/sdk/attr"
 import { and, eq, gte, lte, type Expression } from "@arkiv-network/sdk/query"
 import type { Hex } from "viem"
 import type { PublicClient } from "./arkiv"
@@ -68,3 +68,14 @@ export const myEntities = (client: PublicClient, kind: Kind, owner: Hex) =>
   fetchAll(client, ofKind(kind), { ownedBy: owner })
 
 export const toQueryString = (where: Expression[]): string => and(where).toString()
+
+// Whether this camp already wrote a receipt for the pledge; receipts by anyone else never count.
+export async function receiptExists(client: PublicClient, pledge: Hex, camp: Hex): Promise<boolean> {
+  const page = await client
+    .select({ key: true })
+    .where([...ofKind("receipt"), eq("pledge", key(pledge))])
+    .createdBy(camp)
+    .limit(1)
+    .fetch()
+  return page.entities.length > 0
+}

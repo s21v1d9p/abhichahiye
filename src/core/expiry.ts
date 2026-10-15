@@ -12,7 +12,7 @@ export function secondsLeft(expiresAt: bigint, currentBlock: bigint): number {
   return d > 0n ? Number(d) * BLOCK_SECONDS : 0
 }
 
-// Lifetime Extension sets a new expiry and reverts unless it is strictly later than the current one.
+// Lifetime Extension must never shorten an entity's life, so renewals always ask for a strictly later block.
 export function renewalTarget(currentExpiresAt: bigint, currentBlock: bigint, lifetimeSeconds: number): bigint {
   const fromNow = currentBlock + blocksFor(lifetimeSeconds)
   return fromNow > currentExpiresAt ? fromNow : currentExpiresAt + 1n
@@ -32,3 +32,13 @@ export const needLifetime = (u: Urgency) => ExpirationTime.fromSeconds(LIFETIME.
 
 export const pledgeExpiry = (etaUnix: number) =>
   ExpirationTime.atDate(new Date((etaUnix + LIFETIME.pledgeGrace) * 1000))
+
+// A pledge hides its gap until delivery, so an unbounded ETA would let one wallet bury every need.
+export function assertPledgeEta(etaUnix: number, nowUnix: number): void {
+  if (!Number.isInteger(etaUnix) || etaUnix <= nowUnix) {
+    throw new RangeError("ETA must be a whole unix time in the future")
+  }
+  if (etaUnix > nowUnix + LIFETIME.pledgeMaxHorizon) {
+    throw new RangeError("ETA must be within 48 hours: a pledge hides the gap until it is delivered")
+  }
+}
