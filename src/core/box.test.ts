@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { createMemChain, type MemChain } from "./memchain"
-import { loadBox, toQueryString, siteBoxWhere } from "./queries"
+import { loadBox } from "./queries"
 import { s } from "./records"
 import { ROLES, runScenario, type Wallets } from "./scenario"
 
@@ -21,12 +21,6 @@ afterEach(() => {
 const assam = { south: 24, west: 89, north: 29, east: 97 }
 
 describe("loadBox", () => {
-  it("builds the site range query like the need one", () => {
-    expect(toQueryString(siteBoxWhere({ south: 27, west: 94, north: 28, east: 95.5 }))).toBe(
-      "app = str('abhichahiye') AND kind = str('site') AND lat_e6 >= u64(27000000) AND lat_e6 <= u64(28000000) AND lng_e6 >= u64(94000000) AND lng_e6 <= u64(95500000)",
-    )
-  })
-
   it("returns the authentic needs and camps inside the viewport", async () => {
     await runScenario(chain.pub, wallets)
     const view = await loadBox(chain.pub, assam)

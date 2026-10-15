@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { Expression } from "@arkiv-network/sdk/query"
 import type { PublicClient } from "./arkiv"
-import { boxWhere, fetchAll, loadDistrict, needsInBox, needsWhere, toQueryString } from "./queries"
+import { boxWhere, districtWhere, fetchAll, loadBox, loadDistrict, toQueryString } from "./queries"
 
 type Call = { atBlock?: bigint; cursor?: string }
 
@@ -100,53 +100,50 @@ describe("fetchAll pagination", () => {
 })
 
 describe("loadDistrict snapshot", () => {
-  it("reads all six queries at one block and reports it", async () => {
-    const { client, calls } = fakeNode(1)
+  it("reads the whole district with one query and reports the block it was read at", async () => {
+    const { client, calls, wheres } = fakeNode(1)
     const data = await loadDistrict(client, { district: "Dhemaji" })
-    expect(calls).toHaveLength(6)
-    expect(calls.every((c) => c.atBlock !== undefined)).toBe(true)
-    expect(new Set(calls.map((c) => c.atBlock)).size).toBe(1)
-    expect(data.block).toBe(calls[0]!.atBlock)
+    expect(calls).toHaveLength(1)
+    expect(data.block).toBe(101n)
+    expect(toQueryString(wheres[0]!)).toBe("app = str('abhichahiye') AND district = str('dhemaji')")
     expect(data.truncated).toBe(false)
   })
 
-  it("tells the caller when any of the six result sets was cut short", async () => {
+  it("never pins to getBlockNumber, which viem caches, so a read right after a write sees the write", async () => {
+    const { client } = fakeNode(1)
+    const stale = { ...client, getBlockNumber: async () => 1n } as unknown as typeof client
+    expect((await loadDistrict(stale, { district: "Dhemaji" })).block).toBe(101n)
+  })
+
+  it("tells the caller when the result was cut short", async () => {
     const { client } = fakeNode(10, 200)
     expect((await loadDistrict(client, { district: "Dhemaji" })).truncated).toBe(true)
   })
 })
 
-describe("needsInBox", () => {
+describe("loadBox", () => {
   it("clamps a zoomed-out viewport instead of throwing", async () => {
     const { client, wheres } = fakeNode(1)
-    await needsInBox(client, { south: -85, west: -180, north: 85, east: 200 })
+    await loadBox(client, { south: -85, west: -180, north: 85, east: 200 })
     expect(toQueryString(wheres[0]!)).toBe(
-      "app = str('abhichahiye') AND kind = str('need') AND lat_e6 >= u64(0) AND lat_e6 <= u64(85000000) AND lng_e6 >= u64(0) AND lng_e6 <= u64(180000000)",
+      "app = str('abhichahiye') AND lat_e6 >= u64(0) AND lat_e6 <= u64(85000000) AND lng_e6 >= u64(0) AND lng_e6 <= u64(180000000)",
     )
   })
 
   it("rejects instead of throwing synchronously on invalid input", async () => {
     const { client } = fakeNode(1)
-    await expect(needsInBox(client, { south: Number.NaN, west: 0, north: 1, east: 1 })).rejects.toThrow(RangeError)
+    await expect(loadBox(client, { south: Number.NaN, west: 0, north: 1, east: 1 })).rejects.toThrow(RangeError)
   })
 })
 
 describe("query predicates", () => {
-  it("builds the district gap-board query", () => {
-    expect(toQueryString(needsWhere({ district: "Dhemaji" }))).toBe(
-      "app = str('abhichahiye') AND kind = str('need') AND district = str('dhemaji') AND urgency >= u64(1)",
-    )
-  })
-
-  it("slugs the district and adds urgency and item filters", () => {
-    expect(toQueryString(needsWhere({ district: " North Lakhimpur ", minUrgency: 2, item: "water" }))).toBe(
-      "app = str('abhichahiye') AND kind = str('need') AND district = str('north_lakhimpur') AND urgency >= u64(2) AND item = str('water')",
-    )
+  it("builds the district board query and slugs the district", () => {
+    expect(toQueryString(districtWhere(" North Lakhimpur "))).toBe("app = str('abhichahiye') AND district = str('north_lakhimpur')")
   })
 
   it("builds the map-viewport query with numeric ranges on e6 integers", () => {
     expect(toQueryString(boxWhere({ south: 27, west: 94, north: 28, east: 95.5 }))).toBe(
-      "app = str('abhichahiye') AND kind = str('need') AND lat_e6 >= u64(27000000) AND lat_e6 <= u64(28000000) AND lng_e6 >= u64(94000000) AND lng_e6 <= u64(95500000)",
+      "app = str('abhichahiye') AND lat_e6 >= u64(27000000) AND lat_e6 <= u64(28000000) AND lng_e6 >= u64(94000000) AND lng_e6 <= u64(95500000)",
     )
   })
 

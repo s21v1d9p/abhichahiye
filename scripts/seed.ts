@@ -28,7 +28,7 @@ function loadKeys(): Record<Role, Hex> {
 async function fundWallets(pub: PublicClient, keys: Record<Role, Hex>) {
   const funderKey = process.env.FUNDER_PK as Hex | undefined
   if (!funderKey) throw new Error("FUNDER_PK missing in .env")
-  const funder = makeWalletClient(funderKey)
+  const funder = makeWalletClient(funderKey, process.env.VITE_ARKIV_KEY)
   const balances = await Promise.all(ROLES.map(async (role) => [role, await pub.getBalance({ address: privateKeyToAccount(keys[role]).address })] as const))
   const needy = balances.filter(([, balance]) => balance < MIN_BALANCE).map(([role]) => role)
   if (needy.length === 0) return console.log("all demo wallets are funded")
@@ -55,10 +55,11 @@ async function main() {
     wallets = Object.fromEntries(ROLES.map((role) => [role, chain.wallet()])) as Wallets
     console.log("dry run on an in-memory chain")
   } else {
-    pub = makePublicClient()
+    const key = process.env.VITE_ARKIV_KEY
+    pub = makePublicClient(key)
     const keys = loadKeys()
     await fundWallets(pub, keys)
-    wallets = Object.fromEntries(ROLES.map((role) => [role, makeWalletClient(keys[role])])) as Wallets
+    wallets = Object.fromEntries(ROLES.map((role) => [role, makeWalletClient(keys[role], key)])) as Wallets
   }
 
   const started = Date.now()

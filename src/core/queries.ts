@@ -5,20 +5,28 @@ import type { Hex } from "viem"
 import type { PublicClient } from "./arkiv"
 import { type Gap, computeGaps } from "./gaps"
 import { type Box, slug, toE6 } from "./geo"
-import { type Rec, s, toRec } from "./records"
+import { n, type Rec, s, toRec } from "./records"
 import { APP, type Item, KIND, type Kind } from "./schema"
 import { isAuthenticNeed, trustedOrgs } from "./trust"
 
+// Every arkiv_query costs 100 units of the caller's budget however many entities it returns, and getEntity is a query
+// too (see arkiv/friction.md). So each view is built from as few queries as possible: one for a whole district, one
+// for a map viewport, two for a forwarded need link.
+
 const PAGE_SIZE = 200
 const MAX_RESULTS = 1000
+// The longest OR list put in one predicate; 40 clauses were verified on Tiramisu.
+export const MAX_OR = 40
 
 type Scope = { createdBy?: Hex; ownedBy?: Hex }
 
-export type Fetched = { recs: Rec[]; truncated: boolean }
+export type Fetched = { recs: Rec[]; truncated: boolean; block: bigint }
 
 // The SDK's page.next() re-queries at the chain head, and the node rejects a cursor once the head has moved
 // (-32005), so later pages are requested by hand, pinned to the block the first page was read at.
 // Anyone can write entities that match these queries, so a result cut off at MAX_RESULTS is reported, never hidden.
+// Views that need several queries pass the first one's block to the rest, so they all read one consistent state.
+// (getBlockNumber is no substitute: viem caches it for seconds, so a read right after a write would miss the write.)
 export async function fetchAll(
   client: PublicClient,
   where: Expression[],
@@ -43,18 +51,30 @@ export async function fetchAll(
     page = await build().atBlock(pinned).cursor(page.cursor).fetch()
     recs.push(...page.entities.map(toRec))
   }
-  return { recs, truncated: page.cursor !== undefined }
+  return { recs, truncated: page.cursor !== undefined, block: pinned }
 }
 
-const ofKind = (kind: Kind): Expression[] => [eq("app", APP), eq("kind", kind)]
+const app = eq("app", APP)
+export const ofKind = (kind: Kind): Expression[] => [app, eq("kind", kind)]
+export const byCreator = (wallets: readonly string[]) => or(wallets.map((w) => eq("$creator", addr(w as Hex))))
+
+export type ByKind = Record<Kind, Rec[]>
+
+export function byKind(recs: Rec[]): ByKind {
+  const out: ByKind = { org: [], site: [], need: [], pledge: [], receipt: [], vouch: [] }
+  for (const r of recs) {
+    const kind = s(r, "kind") as Kind
+    if (kind in out) out[kind].push(r)
+  }
+  return out
+}
 
 export type DistrictFilter = { district: string; minUrgency?: 1 | 2 | 3; item?: Item }
 
-export function needsWhere(f: DistrictFilter): Expression[] {
-  const where = [...ofKind("need"), eq("district", slug(f.district)), gte("urgency", u64(f.minUrgency ?? 1))]
-  if (f.item) where.push(eq("item", f.item))
-  return where
-}
+// Needs, pledges, receipts, sites, organisations and vouches all carry their district, so one query returns a board.
+export const districtWhere = (district: string): Expression[] => [app, eq("district", slug(district))]
+
+const wanted = (f: DistrictFilter) => (need: Rec) => n(need, "urgency") >= BigInt(f.minUrgency ?? 1) && (!f.item || s(need, "item") === f.item)
 
 export type DistrictData = {
   block: bigint
@@ -68,68 +88,58 @@ export type DistrictData = {
   sitesByKey: Map<string, Rec>
 }
 
-type Sets = Record<"needs" | "pledges" | "receipts" | "sites" | "orgs" | "vouches", Fetched>
-const nothing: Fetched = { recs: [], truncated: false }
-const emptySets: Sets = { needs: nothing, pledges: nothing, receipts: nothing, sites: nothing, orgs: nothing, vouches: nothing }
-
-function assemble(block: bigint, sets: Sets): DistrictData {
+function assemble(block: bigint, truncated: boolean, k: Partial<ByKind>): DistrictData {
+  const sites = k.site ?? []
   return {
     block,
-    truncated: Object.values(sets).some((x) => x.truncated),
-    needs: sets.needs.recs,
-    pledges: sets.pledges.recs,
-    receipts: sets.receipts.recs,
-    sites: sets.sites.recs,
-    orgs: sets.orgs.recs,
-    vouches: sets.vouches.recs,
-    sitesByKey: new Map<string, Rec>(sets.sites.recs.map((x) => [x.key, x])),
+    truncated,
+    needs: k.need ?? [],
+    pledges: k.pledge ?? [],
+    receipts: k.receipt ?? [],
+    sites,
+    orgs: k.org ?? [],
+    vouches: k.vouch ?? [],
+    sitesByKey: new Map<string, Rec>(sites.map((x) => [x.key, x])),
   }
 }
 
-// All six queries read the same block, so a need, its pledges and their receipts are always seen consistently.
+// A need shows the name of the organisation that confirmed it. Most are registered in the same district and arrive
+// with it; the rest take one more query, by creator.
+async function withNames(client: PublicClient, orgs: Rec[], creators: Hex[], block: bigint): Promise<Fetched> {
+  const known = new Set<string>(orgs.map((o) => o.creator))
+  const missing = [...new Set(creators)].filter((c) => !known.has(c)).slice(0, MAX_OR)
+  if (missing.length === 0) return { recs: orgs, truncated: false, block }
+  const more = await fetchAll(client, [...ofKind("org"), byCreator(missing)], {}, block)
+  return { recs: [...orgs, ...more.recs], truncated: more.truncated, block }
+}
+
 export async function loadDistrict(client: PublicClient, f: DistrictFilter): Promise<DistrictData> {
-  const block = await client.getBlockNumber()
-  const inDistrict = eq("district", slug(f.district))
-  const [needs, pledges, receipts, sites, orgs, vouches] = await Promise.all([
-    fetchAll(client, needsWhere(f), {}, block),
-    fetchAll(client, [...ofKind("pledge"), inDistrict], {}, block),
-    fetchAll(client, [...ofKind("receipt"), inDistrict], {}, block),
-    fetchAll(client, [...ofKind("site"), inDistrict], {}, block),
-    fetchAll(client, ofKind("org"), {}, block),
-    fetchAll(client, [...ofKind("vouch"), inDistrict], {}, block),
-  ])
-  return assemble(block, { needs, pledges, receipts, sites, orgs, vouches })
+  const all = await fetchAll(client, districtWhere(f.district))
+  const k = byKind(all.recs)
+  const orgs = await withNames(client, k.org, k.need.map((x) => x.creator), all.block)
+  return assemble(all.block, all.truncated || orgs.truncated, { ...k, need: k.need.filter(wanted(f)), org: orgs.recs })
 }
 
-const MAX_TRUSTED = 40
-
-// The verified board. Every query is scoped by $creator to wallets that a trusted authority vouched for, so entities
-// written by anyone else, however well-formed and however many, can never reach it.
+// The verified board. Its queries are scoped by $creator to wallets that a trusted authority vouched for, so entities
+// written by anyone else, however well-formed and however many, never reach it.
 export async function loadVerifiedDistrict(client: PublicClient, f: DistrictFilter, authorities: Hex[]): Promise<DistrictData> {
-  const block = await client.getBlockNumber()
-  if (authorities.length === 0) return assemble(block, emptySets)
-  const byCreator = (wallets: Hex[]) => or(wallets.map((w) => eq("$creator", addr(w))))
-  const inDistrict = eq("district", slug(f.district))
-
-  const vouches = await fetchAll(client, [...ofKind("vouch"), inDistrict, byCreator(authorities)], {}, block)
+  if (authorities.length === 0) return assemble(await client.getBlockNumber({ cacheTime: 0 }), false, {})
+  const vouches = await fetchAll(client, [...districtWhere(f.district), eq("kind", KIND.vouch), byCreator(authorities.slice(0, MAX_OR))])
+  const block = vouches.block
   const trusted = [...trustedOrgs(vouches.recs, authorities)]
-  const cappedVouches = { ...vouches, truncated: vouches.truncated || trusted.length > MAX_TRUSTED }
-  if (trusted.length === 0) return assemble(block, { ...emptySets, vouches: cappedVouches })
+  if (trusted.length === 0) return assemble(block, vouches.truncated, { vouch: vouches.recs })
 
-  const creators = byCreator(trusted.slice(0, MAX_TRUSTED))
-  const [needs, pledges, receipts, sites, orgs] = await Promise.all([
-    fetchAll(client, [...needsWhere(f), creators], {}, block),
-    fetchAll(client, [...ofKind("pledge"), inDistrict, creators], {}, block),
-    fetchAll(client, [...ofKind("receipt"), inDistrict, creators], {}, block),
-    fetchAll(client, [...ofKind("site"), inDistrict, creators], {}, block),
-    fetchAll(client, [...ofKind("org"), creators], {}, block),
-  ])
-  return assemble(block, { needs, pledges, receipts, sites, orgs, vouches: cappedVouches })
+  const rest = await fetchAll(client, [...districtWhere(f.district), byCreator(trusted.slice(0, MAX_OR))], {}, block)
+  const k = byKind(rest.recs)
+  const orgs = await withNames(client, k.org, k.need.map((x) => x.creator), block)
+  const truncated = vouches.truncated || rest.truncated || orgs.truncated || trusted.length > MAX_OR
+  return assemble(block, truncated, { ...k, need: k.need.filter(wanted(f)), org: orgs.recs, vouch: vouches.recs })
 }
 
-function rangeWhere(kind: Kind, b: Box): Expression[] {
+// Needs and sites both carry coordinates, so one numeric range query returns a map viewport's camps and their needs.
+export function boxWhere(b: Box): Expression[] {
   return [
-    ...ofKind(kind),
+    app,
     gte("lat_e6", u64(toE6(b.south))),
     lte("lat_e6", u64(toE6(b.north))),
     gte("lng_e6", u64(toE6(b.west))),
@@ -137,34 +147,16 @@ function rangeWhere(kind: Kind, b: Box): Expression[] {
   ]
 }
 
-export const boxWhere = (b: Box): Expression[] => rangeWhere("need", b)
-export const siteBoxWhere = (b: Box): Expression[] => rangeWhere("site", b)
-
 // A zoomed-out map can extend past the 0..180 degrees the e6 attributes can hold; nothing exists out there.
 const clampDegrees = (deg: number) => Math.min(180, Math.max(0, deg))
 const clampBox = (b: Box): Box => ({ south: clampDegrees(b.south), west: clampDegrees(b.west), north: clampDegrees(b.north), east: clampDegrees(b.east) })
 
-export async function needsInBox(client: PublicClient, b: Box): Promise<Rec[]> {
-  return (await fetchAll(client, boxWhere(clampBox(b)))).recs
-}
-
-// Everything the map needs for one viewport, across districts: the camps inside it and the needs that are really
-// theirs. Both are numeric range queries on lat_e6 / lng_e6, read at one block.
 export async function loadBox(client: PublicClient, b: Box) {
   const box = clampBox(b)
-  const block = await client.getBlockNumber()
-  const [needs, sites] = await Promise.all([
-    fetchAll(client, boxWhere(box), {}, block),
-    fetchAll(client, siteBoxWhere(box), {}, block),
-  ])
-  const sitesByKey = new Map<string, Rec>(sites.recs.map((x) => [x.key, x]))
-  return {
-    block,
-    truncated: needs.truncated || sites.truncated,
-    needs: needs.recs.filter((x) => isAuthenticNeed(x, sitesByKey)),
-    sites: sites.recs,
-    sitesByKey,
-  }
+  const all = await fetchAll(client, boxWhere(box))
+  const k = byKind(all.recs)
+  const sitesByKey = new Map<string, Rec>(k.site.map((x) => [x.key, x]))
+  return { block: all.block, truncated: all.truncated, needs: k.need.filter((x) => isAuthenticNeed(x, sitesByKey)), sites: k.site, sitesByKey }
 }
 
 export async function myEntities(client: PublicClient, kind: Kind, owner: Hex): Promise<Rec[]> {
@@ -199,36 +191,56 @@ export async function isVouched(client: PublicClient, org: Hex, authorities: Hex
   if (authorities.length === 0) return false
   const page = await client
     .select({ key: true })
-    .where([...ofKind("vouch"), eq("org", addr(org)), or(authorities.map((a) => eq("$creator", addr(a))))])
+    .where([...ofKind("vouch"), eq("org", addr(org)), byCreator(authorities.slice(0, MAX_OR))])
     .limit(1)
     .fetch()
   return page.entities.length > 0
 }
 
 export type NeedView =
-  | { state: "live"; block: bigint; need: Rec; site: Rec; gap: Gap }
+  | { state: "live"; block: bigint; need: Rec; site: Rec; gap: Gap; orgName: string; vouched: boolean }
   | { state: "gone" }
   | { state: "foreign" }
   | { state: "orphan"; need: Rec }
   | { state: "forged"; need: Rec }
 
+const KEY = /^0x[0-9a-fA-F]{64}$/
+
 // What a forwarded need link should say: a live need with its current gap, or why nobody should act on it.
 // gone = expired, deleted or never existed; foreign = another app's entity; orphan = its camp listing has expired;
-// forged = written by a different wallet than the camp listing's creator.
-export async function loadNeed(client: PublicClient, needKey: Hex, nowUnix = Math.floor(Date.now() / 1000)): Promise<NeedView> {
-  if (!/^0x[0-9a-fA-F]{64}$/.test(needKey)) return { state: "gone" }
-  const block = await client.getBlockNumber()
-  const need = await liveRec(client, needKey)
+// forged = written by a different wallet than the camp listing's creator. Two queries, both at one block.
+export async function loadNeed(client: PublicClient, needKey: Hex, nowUnix = Math.floor(Date.now() / 1000), authorities: Hex[] = []): Promise<NeedView> {
+  if (!KEY.test(needKey)) return { state: "gone" }
+  const k = needKey.toLowerCase() as Hex
+
+  // The need itself, and every pledge and receipt that names it.
+  const first = await fetchAll(client, [or(eq("$key", key(k)), and(app, eq("need", key(k))))])
+  const block = first.block
+  const need = first.recs.find((r) => r.key === k)
   if (!need) return { state: "gone" }
   if (s(need, "app") !== APP || s(need, "kind") !== KIND.need) return { state: "foreign" }
-  const site = await liveRec(client, s(need, "site") as Hex)
+  const siteKey = s(need, "site").toLowerCase()
+  if (!KEY.test(siteKey)) return { state: "orphan", need }
+
+  // Its camp listing, the organisation that confirmed it, and any vouch for that organisation by a trusted authority.
+  const vouch = authorities.length > 0 ? [and(app, eq("kind", KIND.vouch), eq("org", addr(need.creator)), byCreator(authorities.slice(0, MAX_OR)))] : []
+  const second = await fetchAll(client, [or(eq("$key", key(siteKey as Hex)), and(app, eq("kind", KIND.org), eq("$creator", addr(need.creator))), ...vouch)], {}, block)
+  const site = second.recs.find((r) => r.key === siteKey && s(r, "app") === APP && s(r, "kind") === KIND.site)
   if (!site) return { state: "orphan", need }
   if (site.creator !== need.creator) return { state: "forged", need }
 
-  const [pledges, receipts] = await Promise.all([
-    fetchAll(client, [...ofKind("pledge"), eq("need", key(needKey))], {}, block),
-    fetchAll(client, [...ofKind("receipt"), eq("need", key(needKey))], { createdBy: need.creator }, block),
-  ])
-  const [gap] = computeGaps([need], pledges.recs, receipts.recs, new Map([[site.key, site]]), { nowUnix, block })
-  return gap ? { state: "live", block, need, site, gap } : { state: "forged", need }
+  const named = byKind(first.recs)
+  const receipts = named.receipt.filter((r) => r.creator === need.creator)
+  const [gap] = computeGaps([need], named.pledge, receipts, new Map([[site.key, site]]), { nowUnix, block })
+  if (!gap) return { state: "forged", need }
+  const about = byKind(second.recs)
+  return {
+    state: "live",
+    block,
+    need,
+    site,
+    gap,
+    orgName: String(about.org.find((o) => o.creator === need.creator)?.payload.name ?? ""),
+    vouched: trustedOrgs(about.vouch, authorities).has(need.creator as Hex),
+  }
 }

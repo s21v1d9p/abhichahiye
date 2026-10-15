@@ -17,10 +17,11 @@ const OUT = "docs/evidence/probe.json"
 const funderKey = process.env.FUNDER_PK as Hex | undefined
 if (!funderKey) throw new Error("FUNDER_PK missing in .env")
 
-const pub = makePublicClient()
+const key = process.env.VITE_ARKIV_KEY
+const pub = makePublicClient(key)
 const ws = makeWsClient()
-const funder = makeWalletClient(funderKey)
-const probe = makeWalletClient(generatePrivateKey())
+const funder = makeWalletClient(funderKey, key)
+const probe = makeWalletClient(generatePrivateKey(), key)
 
 type TxRecord = { step: string; hash: Hex; block: string; gasUsed: string; costGlm: string; explorer: string }
 type Finding = { id: string; step: string; ok: boolean; detail: string }
