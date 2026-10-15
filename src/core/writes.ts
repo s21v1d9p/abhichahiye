@@ -148,6 +148,18 @@ export async function pledgeTo(
   })
 }
 
+// An honest donor who is running late pushes the ETA back where everyone can see it, instead of letting the pledge lapse.
+export async function delayPledge(w: WalletClient, pub: PublicClient, pledge: Rec, newEtaUnix: number) {
+  assertPledgeEta(newEtaUnix, Math.floor(Date.now() / 1000))
+  const live = await liveRec(pub, pledge.key)
+  if (!live) throw new Error("This pledge has already lapsed. Pledge again.")
+  if (BigInt(newEtaUnix) <= n(live, "eta")) throw new RangeError("The new ETA must be later than the current one")
+  return w.executeBatch({
+    patches: [{ entityKey: live.key, set: { eta: u64(BigInt(newEtaUnix)) } }],
+    extensions: [{ entityKey: live.key, expires: pledgeExpiry(newEtaUnix) }],
+  })
+}
+
 // The receipt and the change to the need must land together, so a delivery is never half-recorded.
 export async function recordReceipt(w: WalletClient, pub: PublicClient, x: { pledge: Rec; need: Rec }) {
   if (await receiptExists(pub, x.pledge.key, w.account.address)) {
