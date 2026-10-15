@@ -83,7 +83,8 @@ await client.select({ key: true }).where(eq("app", "x")).limit(1).fetch() // nev
 **What we did.**
 - Built every view from one or two queries instead of four to six: a whole district is a single query on the `district` attribute, a map viewport one range query, a forwarded need link two ([`src/core/queries.ts`](../src/core/queries.ts)).
 - Live events no longer look anything up; they only count if they touch an entity or wallet already on screen ([`src/web/lib/live.ts`](../src/web/lib/live.ts)).
-- A custom `fetchFn` reads the public endpoint first and, on a 429, moves to a fallback until the budget resets: in scripts the keyed URL, in the browser our `/api/rpc`, which adds the key on the server and forwards nothing but `arkiv_query`. With no fallback it throws `ArkivQuotaError` at once instead of waiting ([`src/core/arkiv.ts`](../src/core/arkiv.ts), [`api/rpc.ts`](../api/rpc.ts)).
+- A custom `fetchFn` reads the public endpoint first and, when a query gets a 429, moves queries to a fallback until the budget resets: in scripts the keyed URL, in the browser our `/api/rpc`, which adds the key on the server and forwards nothing but `arkiv_query`. With no fallback it throws `ArkivQuotaError` at once instead of waiting ([`src/core/arkiv.ts`](../src/core/arkiv.ts), [`api/rpc.ts`](../api/rpc.ts)).
+- Only `arkiv_query` is blocked. From a browser whose budget was spent we measured `eth_blockNumber`, `eth_chainId` and `eth_getBalance` all answering 200 while `arkiv_query` answered 429 `ANON_COST_LIMITED`. Our first version moved every call to the fallback after the first 429, so the proxy refused the `eth_*` calls with 403. Only the deployed site showed this, because the scripts' keyed URL accepts every method. Now only `arkiv_query` changes endpoint, and a test pins that down.
 - Verified by forcing every public query to 429 in Playwright: the board still loaded in 1.8 s through the fallback.
 
 **Suggested fix.**

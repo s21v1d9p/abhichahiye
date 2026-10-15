@@ -20,7 +20,9 @@ function stub(...responses: Response[]) {
   return calls
 }
 
-const call = (f: typeof fetch) => f(PUBLIC_HTTP, { method: "POST", body: '{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber"}' })
+const send = (method: string) => (f: typeof fetch) => f(PUBLIC_HTTP, { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params: [] }) })
+const call = send("arkiv_query")
+const blockNumber = send("eth_blockNumber")
 
 describe("arkivFetch", () => {
   it("uses the public endpoint while it answers", async () => {
@@ -40,6 +42,25 @@ describe("arkivFetch", () => {
     vi.advanceTimersByTime(2047 * 1000)
     await call(f)
     expect(calls.at(-1)).toBe(PUBLIC_HTTP)
+  })
+
+  // The budget is spent only by arkiv_query. With it exhausted, the public endpoint still answers eth_* calls, and the
+  // browser's fallback (/api/rpc) refuses everything except queries.
+  it("sends only queries to the fallback; free calls stay on the public endpoint", async () => {
+    const calls = stub(limited(2046), ok(), ok(), ok(), ok())
+    const f = arkivFetch("/api/rpc")
+    await call(f)
+    await blockNumber(f)
+    await call(f)
+    const batch = await f(PUBLIC_HTTP, { method: "POST", body: JSON.stringify([{ jsonrpc: "2.0", id: 1, method: "arkiv_query", params: [] }]) })
+    expect(batch.status).toBe(200)
+    expect(calls).toEqual([PUBLIC_HTTP, "/api/rpc", PUBLIC_HTTP, "/api/rpc", "/api/rpc"])
+  })
+
+  it("never moves a free call to the fallback, even when it is rate limited", async () => {
+    const calls = stub(limited(3, "RATE_LIMITED"))
+    expect((await blockNumber(arkivFetch("/api/rpc"))).status).toBe(429)
+    expect(calls).toEqual([PUBLIC_HTTP])
   })
 
   it("fails at once with a clear error instead of waiting half an hour when there is no key", async () => {
