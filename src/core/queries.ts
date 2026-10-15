@@ -11,22 +11,36 @@ const MAX_RESULTS = 1000
 
 type Scope = { createdBy?: Hex; ownedBy?: Hex }
 
-// Every page of one walk is read at the same block, so results cannot shift while paging.
-export async function fetchAll(client: PublicClient, where: Expression[], scope: Scope = {}): Promise<Rec[]> {
-  let query = client
-    .select({ key: true, owner: true, creator: true, expiresAt: true, attributes: true, payload: true })
-    .where(where)
-    .limit(PAGE_SIZE)
-  if (scope.createdBy) query = query.createdBy(scope.createdBy)
-  if (scope.ownedBy) query = query.ownedBy(scope.ownedBy)
+export type Fetched = { recs: Rec[]; truncated: boolean }
 
-  let page = await query.fetch()
-  const out = page.entities.map(toRec)
-  while (page.hasNextPage() && out.length < MAX_RESULTS) {
-    page = await page.next()
-    out.push(...page.entities.map(toRec))
+// The SDK's page.next() re-queries at the chain head, and the node rejects a cursor once the head has moved
+// (-32005), so later pages are requested by hand, pinned to the block the first page was read at.
+// Anyone can write entities that match these queries, so a result cut off at MAX_RESULTS is reported, never hidden.
+export async function fetchAll(
+  client: PublicClient,
+  where: Expression[],
+  scope: Scope = {},
+  atBlock?: bigint,
+): Promise<Fetched> {
+  const build = () => {
+    let query = client
+      .select({ key: true, owner: true, creator: true, expiresAt: true, attributes: true, payload: true })
+      .where(where)
+      .limit(PAGE_SIZE)
+    if (atBlock !== undefined) query = query.atBlock(atBlock)
+    if (scope.createdBy) query = query.createdBy(scope.createdBy)
+    if (scope.ownedBy) query = query.ownedBy(scope.ownedBy)
+    return query
   }
-  return out
+
+  let page = await build().fetch()
+  const pinned = page.blockNumber
+  const recs = page.entities.map(toRec)
+  while (page.cursor !== undefined && recs.length < MAX_RESULTS) {
+    page = await build().atBlock(pinned).cursor(page.cursor).fetch()
+    recs.push(...page.entities.map(toRec))
+  }
+  return { recs, truncated: page.cursor !== undefined }
 }
 
 const ofKind = (kind: Kind): Expression[] => [eq("app", APP), eq("kind", kind)]
@@ -39,17 +53,30 @@ export function needsWhere(f: DistrictFilter): Expression[] {
   return where
 }
 
+// All six queries read the same block, so a need, its pledges and their receipts are always seen consistently.
 export async function loadDistrict(client: PublicClient, f: DistrictFilter) {
+  const block = await client.getBlockNumber()
   const inDistrict = eq("district", slug(f.district))
-  const [needs, pledges, receipts, sites, orgs, vouches] = await Promise.all([
-    fetchAll(client, needsWhere(f)),
-    fetchAll(client, [...ofKind("pledge"), inDistrict]),
-    fetchAll(client, [...ofKind("receipt"), inDistrict]),
-    fetchAll(client, [...ofKind("site"), inDistrict]),
-    fetchAll(client, ofKind("org")),
-    fetchAll(client, [...ofKind("vouch"), inDistrict]),
+  const sets = await Promise.all([
+    fetchAll(client, needsWhere(f), {}, block),
+    fetchAll(client, [...ofKind("pledge"), inDistrict], {}, block),
+    fetchAll(client, [...ofKind("receipt"), inDistrict], {}, block),
+    fetchAll(client, [...ofKind("site"), inDistrict], {}, block),
+    fetchAll(client, ofKind("org"), {}, block),
+    fetchAll(client, [...ofKind("vouch"), inDistrict], {}, block),
   ])
-  return { needs, pledges, receipts, sites, orgs, vouches, sitesByKey: new Map(sites.map((x) => [x.key, x])) }
+  const [needs, pledges, receipts, sites, orgs, vouches] = sets
+  return {
+    block,
+    truncated: sets.some((x) => x.truncated),
+    needs: needs.recs,
+    pledges: pledges.recs,
+    receipts: receipts.recs,
+    sites: sites.recs,
+    orgs: orgs.recs,
+    vouches: vouches.recs,
+    sitesByKey: new Map(sites.recs.map((x) => [x.key, x])),
+  }
 }
 
 export function boxWhere(b: Box): Expression[] {
@@ -62,10 +89,17 @@ export function boxWhere(b: Box): Expression[] {
   ]
 }
 
-export const needsInBox = (client: PublicClient, b: Box) => fetchAll(client, boxWhere(b))
+// A zoomed-out map can extend past the 0..180 degrees the e6 attributes can hold; nothing exists out there.
+const clampDegrees = (deg: number) => Math.min(180, Math.max(0, deg))
 
-export const myEntities = (client: PublicClient, kind: Kind, owner: Hex) =>
-  fetchAll(client, ofKind(kind), { ownedBy: owner })
+export async function needsInBox(client: PublicClient, b: Box): Promise<Rec[]> {
+  const box = { south: clampDegrees(b.south), west: clampDegrees(b.west), north: clampDegrees(b.north), east: clampDegrees(b.east) }
+  return (await fetchAll(client, boxWhere(box))).recs
+}
+
+export async function myEntities(client: PublicClient, kind: Kind, owner: Hex): Promise<Rec[]> {
+  return (await fetchAll(client, ofKind(kind), { ownedBy: owner })).recs
+}
 
 export const toQueryString = (where: Expression[]): string => and(where).toString()
 
