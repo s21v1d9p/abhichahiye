@@ -1,0 +1,239 @@
+{
+  "ranAt": "2026-10-15T09:40:28.160Z",
+  "chain": "Tiramisu (7738577)",
+  "sdk": "0.8.1",
+  "startBlock": "603692",
+  "probeWallet": "0x005d6FAbEd8ecF4b4F282a9Af88Bb6B89484A662",
+  "funder": "0xAe0a347474596E103458cEc04AE7075fe706F46a",
+  "findings": [
+    {
+      "id": "P1",
+      "step": "fund a new wallet",
+      "ok": true,
+      "detail": "funded and confirmed in 3706 ms"
+    },
+    {
+      "id": "P2",
+      "step": "create and query back",
+      "ok": true,
+      "detail": "createEntity resolved after 3722 ms (it waits for the receipt); a query returned it 377 ms later"
+    },
+    {
+      "id": "P3",
+      "step": "patch an attribute",
+      "ok": true,
+      "detail": "qty is now 180"
+    },
+    {
+      "id": "P4",
+      "step": "one batch: create + patch + extend",
+      "ok": true,
+      "detail": "one transaction: qty 120, expiry 603996 -> 604296 (+300 blocks), new entity 0xa58f6eb22c51a2b62cc96fb1bc738eea69da4fae3fb0656f13aece943edb5f38"
+    },
+    {
+      "id": "F5",
+      "step": "extend to the same expiry",
+      "ok": true,
+      "detail": "real transaction succeeded and changed nothing (expiry still block 604296)"
+    },
+    {
+      "id": "P6",
+      "step": "extend to an earlier expiry",
+      "ok": true,
+      "detail": "refused, nothing sent: Transaction failed: entity 0x4fe85a7d…6dd037 already expires at block 604296, so extending it to 604295 would shorten its life <- The contract function \"execute\" reverted. <- Execution reverted for an unknown reason. <- RPC Request failed."
+    },
+    {
+      "id": "F4",
+      "step": "uppercase attribute name",
+      "ok": true,
+      "detail": "the SDK built and signed it; the node refused it at gas estimation: Transaction failed: an attribute name holds \"Q\" (0x51) at byte 0, which is outside the name charset (\"A\"-\"Z\", \"a\"-\"z\", \"0\"-\"9\", \".\", \"-\" and \"_\", with a letter first) <- The contract function \"execute\" reverted. <- Execution reverted for an unknown reason. <- RPC Request failed."
+    },
+    {
+      "id": "P8a",
+      "step": "create a read-only entity",
+      "ok": true,
+      "detail": "created 0x32d530c4946b8fad3b65bc8a951a68ca43aa626e1c679158046a2d6106ba760e"
+    },
+    {
+      "id": "P8b",
+      "step": "patch a read-only entity",
+      "ok": true,
+      "detail": "refused, nothing sent: Transaction failed: entity 0x32d530c4…ba760e was created readonly, so its contents can never change. Its expiry can still be extended, and it can be transferred or deleted <- The contract function \"execute\" reverted. <- Execution reverted for an unknown reason. <- RPC Request failed."
+    },
+    {
+      "id": "P8c",
+      "step": "extend a read-only entity",
+      "ok": true,
+      "detail": "allowed: expiry 604010 -> 604110"
+    },
+    {
+      "id": "P8d",
+      "step": "delete a read-only entity",
+      "ok": true,
+      "detail": "allowed: its owner can withdraw it (an authority can revoke a vouch early)"
+    },
+    {
+      "id": "P9",
+      "step": "delete",
+      "ok": true,
+      "detail": "getEntity now throws NoEntityFoundError"
+    },
+    {
+      "id": "P10",
+      "step": "Entity Expiration (10 s lifetime)",
+      "ok": true,
+      "detail": "expiresAt block 603727; getEntity stopped finding it 11 s after creation (head now 603727); queries return 0"
+    },
+    {
+      "id": "P11",
+      "step": "live events over WebSocket",
+      "ok": true,
+      "detail": "11 events for probe entities (EntityCreated, EntityPatched, ExpiryExtended, EntityDeleted); 133 chain-wide in total; events when the 10 s entity expired: 0"
+    }
+  ],
+  "transactions": [
+    {
+      "step": "fund a new wallet with 0.01 GLM",
+      "hash": "0x617f8ead4a697e0be0aef0ebf4204c3754a5410becd526bbf29737224d0827c4",
+      "block": "603694",
+      "gasUsed": "21000",
+      "costGlm": "0.000021000000042",
+      "explorer": "https://tiramisu.explorer.arkiv.network/tx/0x617f8ead4a697e0be0aef0ebf4204c3754a5410becd526bbf29737224d0827c4"
+    },
+    {
+      "step": "createEntity",
+      "hash": "0xcd676834652c24ba2cee78b3e2a89d454d89b91c766b411701f681f0b6dda8ec",
+      "block": "603696",
+      "gasUsed": "95512",
+      "costGlm": "0.000095512000191024",
+      "explorer": "https://tiramisu.explorer.arkiv.network/tx/0xcd676834652c24ba2cee78b3e2a89d454d89b91c766b411701f681f0b6dda8ec"
+    },
+    {
+      "step": "patchEntity qty 300 -> 180",
+      "hash": "0x349f898bd2520542f887d4912c856e172f49ad5d0b2e3bac00f6e76727a89070",
+      "block": "603698",
+      "gasUsed": "45128",
+      "costGlm": "0.000045128000090256",
+      "explorer": "https://tiramisu.explorer.arkiv.network/tx/0x349f898bd2520542f887d4912c856e172f49ad5d0b2e3bac00f6e76727a89070"
+    },
+    {
+      "step": "executeBatch create + patch + extend",
+      "hash": "0x93981220c9e813f35967afe1689ae318e64b05ff2c265599f25f8118a14acd71",
+      "block": "603701",
+      "gasUsed": "145416",
+      "costGlm": "0.000145416000290832",
+      "explorer": "https://tiramisu.explorer.arkiv.network/tx/0x93981220c9e813f35967afe1689ae318e64b05ff2c265599f25f8118a14acd71"
+    },
+    {
+      "step": "extendEntity to the SAME expiry (F5)",
+      "hash": "0x2257233a045463a5f55cc880fecf4a0f3a3a10a9f9f1f6f457948ac3b8fa2a04",
+      "block": "603705",
+      "gasUsed": "25240",
+      "costGlm": "0.00002524000005048",
+      "explorer": "https://tiramisu.explorer.arkiv.network/tx/0x2257233a045463a5f55cc880fecf4a0f3a3a10a9f9f1f6f457948ac3b8fa2a04"
+    },
+    {
+      "step": "createEntity readonly",
+      "hash": "0x4247c32823d3263338c26e8eb363ef6ac80b40d2d55f03e676b7029c08d95de4",
+      "block": "603710",
+      "gasUsed": "95288",
+      "costGlm": "0.000095288000190576",
+      "explorer": "https://tiramisu.explorer.arkiv.network/tx/0x4247c32823d3263338c26e8eb363ef6ac80b40d2d55f03e676b7029c08d95de4"
+    },
+    {
+      "step": "extendEntity readonly",
+      "hash": "0x6b0cde3cb44617e175ab8ea912e084f277060e25d114f7ac5832b7f9ef52ed2b",
+      "block": "603713",
+      "gasUsed": "25240",
+      "costGlm": "0.00002524000005048",
+      "explorer": "https://tiramisu.explorer.arkiv.network/tx/0x6b0cde3cb44617e175ab8ea912e084f277060e25d114f7ac5832b7f9ef52ed2b"
+    },
+    {
+      "step": "deleteEntity readonly",
+      "hash": "0xe7280df1a5f05396c8d45f6dde3725e8fe8b2cbb7e31c1d6eca4457a7d246e7f",
+      "block": "603717",
+      "gasUsed": "24510",
+      "costGlm": "0.00002451000004902",
+      "explorer": "https://tiramisu.explorer.arkiv.network/tx/0xe7280df1a5f05396c8d45f6dde3725e8fe8b2cbb7e31c1d6eca4457a7d246e7f"
+    },
+    {
+      "step": "deleteEntity",
+      "hash": "0xc64257befee26e8dcba6d62f6b0b8b84cedf644ca2f76ac2b3bc0411a6fe5158",
+      "block": "603720",
+      "gasUsed": "24510",
+      "costGlm": "0.00002451000004902",
+      "explorer": "https://tiramisu.explorer.arkiv.network/tx/0xc64257befee26e8dcba6d62f6b0b8b84cedf644ca2f76ac2b3bc0411a6fe5158"
+    },
+    {
+      "step": "createEntity with a 10 s lifetime",
+      "hash": "0x63a0c2408a4f994ac59eddcbc84e948fd90f208c4eeb92935ec77f2374a4d0b7",
+      "block": "603722",
+      "gasUsed": "90288",
+      "costGlm": "0.000090288000180576",
+      "explorer": "https://tiramisu.explorer.arkiv.network/tx/0x63a0c2408a4f994ac59eddcbc84e948fd90f208c4eeb92935ec77f2374a4d0b7"
+    }
+  ],
+  "totals": {
+    "transactions": 10,
+    "gas": "592132",
+    "costGlm": "0.000592132001184264"
+  },
+  "events": [
+    {
+      "type": "EntityCreated",
+      "key": "0x4fe85a7d3f149cae271c07d4c8d456366b4648f8c26cb2bf4d198796866dd037",
+      "block": "603696"
+    },
+    {
+      "type": "EntityPatched",
+      "key": "0x4fe85a7d3f149cae271c07d4c8d456366b4648f8c26cb2bf4d198796866dd037",
+      "block": "603698"
+    },
+    {
+      "type": "EntityCreated",
+      "key": "0xa58f6eb22c51a2b62cc96fb1bc738eea69da4fae3fb0656f13aece943edb5f38",
+      "block": "603701"
+    },
+    {
+      "type": "EntityPatched",
+      "key": "0x4fe85a7d3f149cae271c07d4c8d456366b4648f8c26cb2bf4d198796866dd037",
+      "block": "603701"
+    },
+    {
+      "type": "ExpiryExtended",
+      "key": "0x4fe85a7d3f149cae271c07d4c8d456366b4648f8c26cb2bf4d198796866dd037",
+      "block": "603701"
+    },
+    {
+      "type": "ExpiryExtended",
+      "key": "0x4fe85a7d3f149cae271c07d4c8d456366b4648f8c26cb2bf4d198796866dd037",
+      "block": "603705"
+    },
+    {
+      "type": "EntityCreated",
+      "key": "0x32d530c4946b8fad3b65bc8a951a68ca43aa626e1c679158046a2d6106ba760e",
+      "block": "603710"
+    },
+    {
+      "type": "ExpiryExtended",
+      "key": "0x32d530c4946b8fad3b65bc8a951a68ca43aa626e1c679158046a2d6106ba760e",
+      "block": "603713"
+    },
+    {
+      "type": "EntityDeleted",
+      "key": "0x32d530c4946b8fad3b65bc8a951a68ca43aa626e1c679158046a2d6106ba760e",
+      "block": "603717"
+    },
+    {
+      "type": "EntityDeleted",
+      "key": "0xa58f6eb22c51a2b62cc96fb1bc738eea69da4fae3fb0656f13aece943edb5f38",
+      "block": "603720"
+    },
+    {
+      "type": "EntityCreated",
+      "key": "0x73d6108aa269c3be379d98fef3fb3ba72694147fa4d7ef86691aa2ff3120066a",
+      "block": "603722"
+    }
+  ],
+  "chainWideEventsSeen": 133
+}
