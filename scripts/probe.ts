@@ -9,7 +9,7 @@ import { eq } from "@arkiv-network/sdk/query"
 import { jsonToPayload } from "@arkiv-network/sdk/utils"
 import { formatEther, type Hex, parseEther } from "viem"
 import { generatePrivateKey } from "viem/accounts"
-import { explorerAddress, explorerTx, makePublicClient, makeWalletClient, makeWsClient } from "../src/core/arkiv"
+import { explorerAddress, explorerTx, fallbackFromKey, makePublicClient, makeWalletClient, makeWsClient } from "../src/core/arkiv"
 
 const APP = "abhichahiye-probe"
 const OUT = "docs/evidence/probe.json"
@@ -17,11 +17,10 @@ const OUT = "docs/evidence/probe.json"
 const funderKey = process.env.FUNDER_PK as Hex | undefined
 if (!funderKey) throw new Error("FUNDER_PK missing in .env")
 
-const key = process.env.VITE_ARKIV_KEY
-const pub = makePublicClient(key)
+const pub = makePublicClient(fallbackFromKey(process.env.ARKIV_KEY))
 const ws = makeWsClient()
-const funder = makeWalletClient(funderKey, key)
-const probe = makeWalletClient(generatePrivateKey(), key)
+const funder = makeWalletClient(funderKey)
+const probe = makeWalletClient(generatePrivateKey())
 
 type TxRecord = { step: string; hash: Hex; block: string; gasUsed: string; costGlm: string; explorer: string }
 type Finding = { id: string; step: string; ok: boolean; detail: string }

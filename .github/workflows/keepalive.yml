@@ -31,5 +31,5 @@ jobs:
         run: npm run seed
         env:
           SEED_WALLETS_JSON: ${{ secrets.SEED_WALLETS_JSON }}
-          VITE_ARKIV_KEY: ${{ secrets.VITE_ARKIV_KEY }}
+          ARKIV_KEY: ${{ secrets.ARKIV_KEY }}
           FUNDER_PK: ${{ secrets.FUNDER_PK }}

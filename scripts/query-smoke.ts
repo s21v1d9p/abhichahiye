@@ -1,11 +1,11 @@
 // Read-only smoke test against Tiramisu: the same reads the board and the map make, with their exact predicates.
 //   npx tsx scripts/query-smoke.ts [district]
-import { makePublicClient } from "../src/core/arkiv"
+import { fallbackFromKey, makePublicClient } from "../src/core/arkiv"
 import { computeGaps } from "../src/core/gaps"
 import { boxWhere, districtWhere, loadBox, loadDistrict, toQueryString } from "../src/core/queries"
 
 const district = process.argv[2] ?? "dhemaji"
-const client = makePublicClient(process.env.VITE_ARKIV_KEY)
+const client = makePublicClient(fallbackFromKey(process.env.ARKIV_KEY))
 
 const { currentBlock, blockDuration } = await client.getBlockTiming()
 console.log(`tiramisu block ${currentBlock} (${blockDuration}s blocks)`)

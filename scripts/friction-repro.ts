@@ -9,9 +9,9 @@ import { type Expression, exists, gte, hasType, ne, startsWith } from "@arkiv-ne
 import { ExpirationTime, jsonToPayload } from "@arkiv-network/sdk/utils"
 import { custom, http } from "viem"
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts"
-import { makePublicClient, PUBLIC_HTTP } from "../src/core/arkiv"
+import { fallbackFromKey, makePublicClient, PUBLIC_HTTP } from "../src/core/arkiv"
 
-const client = makePublicClient(process.env.VITE_ARKIV_KEY)
+const client = makePublicClient(fallbackFromKey(process.env.ARKIV_KEY))
 const upstream = http()({ chain: tiramisu }).request
 const outcomes: boolean[] = []
 

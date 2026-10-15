@@ -22,27 +22,33 @@ export class ArkivQuotaError extends Error {
 
 const LONG_WAIT_SECONDS = 30
 
+export const keyedUrl = (key: string) => `${PUBLIC_HTTP}/${key}`
+// Scripts run on a machine the operator controls, so they may use the access key directly.
+export const fallbackFromKey = (key: string | undefined) => (key ? keyedUrl(key) : undefined)
+
+const reasonOf = (body: { error?: string | { message?: string } }) =>
+  typeof body.error === "string" ? body.error : (body.error?.message ?? "rate limited")
+
 // Reads go to the public endpoint first: every arkiv_query costs 100 units, and an anonymous client gets a small
 // budget before the endpoint answers 429 with a Retry-After of up to half an hour. viem would silently wait that out,
-// so the page would just hang. Instead, switch to the access key (if configured) until the anonymous budget resets,
-// or fail at once with an error that says what happened.
-export function arkivFetch(key?: string): typeof fetch {
-  let keyedUntil = 0
-  const keyed = key ? `${PUBLIC_HTTP}/${key}` : undefined
+// so the page would just hang. Instead, move to `fallback` until the public budget resets (a keyed URL in scripts;
+// in the browser the app's /api/rpc, which adds the key on the server), or fail at once with an error that says so.
+export function arkivFetch(fallback?: string): typeof fetch {
+  let fallbackUntil = 0
   return async (input, init) => {
-    const onKey = keyed !== undefined && Date.now() < keyedUntil
-    const response = await fetch(onKey ? keyed : input, init)
+    const onFallback = fallback !== undefined && Date.now() < fallbackUntil
+    const response = await fetch(onFallback ? fallback : input, init)
     if (response.status !== 429) return response
     const retryAfter = Number(response.headers.get("retry-after") ?? "0") || 0
-    if (keyed !== undefined && !onKey) {
-      keyedUntil = Date.now() + Math.max(retryAfter, 60) * 1000
-      return fetch(keyed, init)
+    if (fallback !== undefined && !onFallback) {
+      fallbackUntil = Date.now() + Math.max(retryAfter, 60) * 1000
+      return fetch(fallback, init)
     }
     if (retryAfter > LONG_WAIT_SECONDS) {
       const reason = await response
         .clone()
         .json()
-        .then((body: { error?: string }) => body.error ?? "rate limited")
+        .then(reasonOf)
         .catch(() => "rate limited")
       throw new ArkivQuotaError(retryAfter, reason)
     }
@@ -50,13 +56,13 @@ export function arkivFetch(key?: string): typeof fetch {
   }
 }
 
-const transport = (key?: string) => http(PUBLIC_HTTP, { fetchFn: arkivFetch(key) })
-
-export const makePublicClient = (key?: string) => createPublicClient({ chain: tiramisu, transport: transport(key) })
+export const makePublicClient = (fallback?: string) =>
+  createPublicClient({ chain: tiramisu, transport: http(PUBLIC_HTTP, { fetchFn: arkivFetch(fallback) }) })
 // Subscriptions carry no query cost, so live events always use the public socket.
 export const makeWsClient = () => createPublicClient({ chain: tiramisu, transport: webSocket(PUBLIC_WS) })
-export const makeWalletClient = (pk: Hex, key?: string) =>
-  createWalletClient({ chain: tiramisu, transport: transport(key), account: privateKeyToAccount(pk) })
+// Sending transactions costs no query units, so wallets always use the public endpoint and never need the key.
+export const makeWalletClient = (pk: Hex) =>
+  createWalletClient({ chain: tiramisu, transport: http(PUBLIC_HTTP, { fetchFn: arkivFetch() }), account: privateKeyToAccount(pk) })
 
 export type PublicClient = ReturnType<typeof makePublicClient>
 export type WalletClient = ReturnType<typeof makeWalletClient>

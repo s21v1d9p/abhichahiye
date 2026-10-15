@@ -1,5 +1,5 @@
 import type { Hex } from "viem"
-import { makePublicClient } from "../src/core/arkiv"
+import { fallbackFromKey, makePublicClient } from "../src/core/arkiv"
 import { secondsLeft } from "../src/core/expiry"
 import { formatDuration, renderTable, shortHex } from "../src/core/format"
 import { computeGaps } from "../src/core/gaps"
@@ -15,7 +15,7 @@ Exit code of "need": 0 when it is live, 2 when it must not be forwarded.`
 
 const [command, argument, ...rest] = process.argv.slice(2)
 const flags = new Set(rest)
-const client = makePublicClient(process.env.VITE_ARKIV_KEY)
+const client = makePublicClient(fallbackFromKey(process.env.ARKIV_KEY))
 
 async function gaps(district: string) {
   const data = await loadDistrict(client, { district, minUrgency: flags.has("--urgent") ? 2 : 1 })
@@ -82,7 +82,7 @@ function fail(error: unknown): never {
   for (let cur: unknown = error; cur instanceof Error && chain.length < 10; cur = (cur as { cause?: unknown }).cause) chain.push(cur)
   const quota = chain.find((e) => e.name === "ArkivQuotaError")
   if (quota) {
-    console.error(`${quota.message}\nSet VITE_ARKIV_KEY to an access key from https://hub.arkiv.network (in .env or the environment) to keep reading.`)
+    console.error(`${quota.message}\nSet ARKIV_KEY to an access key from https://hub.arkiv.network (in .env or the environment) to keep reading.`)
   } else {
     const first = chain[0] as (Error & { shortMessage?: string; details?: string }) | undefined
     console.error(`Could not read Arkiv: ${first?.details ?? first?.shortMessage ?? first?.message ?? String(error)}`)

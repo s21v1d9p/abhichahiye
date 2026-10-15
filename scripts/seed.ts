@@ -7,7 +7,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { formatEther, type Hex, parseEther } from "viem"
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts"
-import { explorerAddress, makePublicClient, makeWalletClient, type PublicClient, type WalletClient } from "../src/core/arkiv"
+import { explorerAddress, fallbackFromKey, makePublicClient, makeWalletClient, type PublicClient, type WalletClient } from "../src/core/arkiv"
 import { createMemChain } from "../src/core/memchain"
 import { assertScenario, ROLES, type Role, runScenario, type Wallets } from "../src/core/scenario"
 
@@ -35,7 +35,7 @@ async function fundWallets(pub: PublicClient, keys: Record<Role, Hex>) {
   if (needy.length === 0) return console.log("all demo wallets are funded")
   const funderKey = process.env.FUNDER_PK as Hex | undefined
   if (!funderKey) throw new Error(`${needy.join(", ")} need test GLM: set FUNDER_PK`)
-  const funder = makeWalletClient(funderKey, process.env.VITE_ARKIV_KEY)
+  const funder = makeWalletClient(funderKey)
   const have = await pub.getBalance({ address: funder.account.address })
   const need = FUND_EACH * BigInt(needy.length)
   if (have < need + parseEther("0.01")) {
@@ -59,11 +59,10 @@ async function main() {
     wallets = Object.fromEntries(ROLES.map((role) => [role, chain.wallet()])) as Wallets
     console.log("dry run on an in-memory chain")
   } else {
-    const key = process.env.VITE_ARKIV_KEY
-    pub = makePublicClient(key)
+    pub = makePublicClient(fallbackFromKey(process.env.ARKIV_KEY))
     const keys = loadKeys()
     await fundWallets(pub, keys)
-    wallets = Object.fromEntries(ROLES.map((role) => [role, makeWalletClient(keys[role], key)])) as Wallets
+    wallets = Object.fromEntries(ROLES.map((role) => [role, makeWalletClient(keys[role])])) as Wallets
   }
 
   const started = Date.now()
