@@ -19,7 +19,8 @@ const MAX_RESULTS = 1000
 // The longest OR list put in one predicate; 40 clauses were verified on Tiramisu.
 export const MAX_OR = 40
 
-type Scope = { createdBy?: Hex; ownedBy?: Hex }
+// Scoped by creator only: anyone can hand an entity to a wallet with changeOwnership, but nobody can make it the creator.
+type Scope = { createdBy?: Hex }
 
 export type Fetched = { recs: Rec[]; truncated: boolean; block: bigint }
 
@@ -41,7 +42,6 @@ export async function fetchAll(
       .limit(PAGE_SIZE)
     if (atBlock !== undefined) query = query.atBlock(atBlock)
     if (scope.createdBy) query = query.createdBy(scope.createdBy)
-    if (scope.ownedBy) query = query.ownedBy(scope.ownedBy)
     return query
   }
 
