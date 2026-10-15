@@ -1,10 +1,12 @@
+import { NoEntityFoundError } from "@arkiv-network/sdk"
 import { key, u64 } from "@arkiv-network/sdk/attr"
 import { and, eq, gte, lte, type Expression } from "@arkiv-network/sdk/query"
 import type { Hex } from "viem"
 import type { PublicClient } from "./arkiv"
+import { type Gap, computeGaps } from "./gaps"
 import { type Box, slug, toE6 } from "./geo"
-import { type Rec, toRec } from "./records"
-import { APP, type Item, type Kind } from "./schema"
+import { type Rec, s, toRec } from "./records"
+import { APP, type Item, KIND, type Kind } from "./schema"
 
 const PAGE_SIZE = 200
 const MAX_RESULTS = 1000
@@ -75,7 +77,7 @@ export async function loadDistrict(client: PublicClient, f: DistrictFilter) {
     sites: sites.recs,
     orgs: orgs.recs,
     vouches: vouches.recs,
-    sitesByKey: new Map(sites.recs.map((x) => [x.key, x])),
+    sitesByKey: new Map<string, Rec>(sites.recs.map((x) => [x.key, x])),
   }
 }
 
@@ -103,6 +105,16 @@ export async function myEntities(client: PublicClient, kind: Kind, owner: Hex): 
 
 export const toQueryString = (where: Expression[]): string => and(where).toString()
 
+// getEntity throws once an entity has expired or been deleted; for callers here that is an ordinary state.
+export async function liveRec(client: PublicClient, entityKey: Hex): Promise<Rec | undefined> {
+  try {
+    return toRec(await client.getEntity(entityKey))
+  } catch (error) {
+    if (error instanceof NoEntityFoundError) return undefined
+    throw error
+  }
+}
+
 // Whether this camp already wrote a receipt for the pledge; receipts by anyone else never count.
 export async function receiptExists(client: PublicClient, pledge: Hex, camp: Hex): Promise<boolean> {
   const page = await client
@@ -112,4 +124,32 @@ export async function receiptExists(client: PublicClient, pledge: Hex, camp: Hex
     .limit(1)
     .fetch()
   return page.entities.length > 0
+}
+
+export type NeedView =
+  | { state: "live"; block: bigint; need: Rec; site: Rec; gap: Gap }
+  | { state: "gone" }
+  | { state: "foreign" }
+  | { state: "orphan"; need: Rec }
+  | { state: "forged"; need: Rec }
+
+// What a forwarded need link should say: a live need with its current gap, or why nobody should act on it.
+// gone = expired, deleted or never existed; foreign = another app's entity; orphan = its camp listing has expired;
+// forged = written by a different wallet than the camp listing's creator.
+export async function loadNeed(client: PublicClient, needKey: Hex, nowUnix = Math.floor(Date.now() / 1000)): Promise<NeedView> {
+  if (!/^0x[0-9a-fA-F]{64}$/.test(needKey)) return { state: "gone" }
+  const block = await client.getBlockNumber()
+  const need = await liveRec(client, needKey)
+  if (!need) return { state: "gone" }
+  if (s(need, "app") !== APP || s(need, "kind") !== KIND.need) return { state: "foreign" }
+  const site = await liveRec(client, s(need, "site") as Hex)
+  if (!site) return { state: "orphan", need }
+  if (site.creator !== need.creator) return { state: "forged", need }
+
+  const [pledges, receipts] = await Promise.all([
+    fetchAll(client, [...ofKind("pledge"), eq("need", key(needKey))], {}, block),
+    fetchAll(client, [...ofKind("receipt"), eq("need", key(needKey))], { createdBy: need.creator }, block),
+  ])
+  const [gap] = computeGaps([need], pledges.recs, receipts.recs, new Map([[site.key, site]]), { nowUnix, block })
+  return gap ? { state: "live", block, need, site, gap } : { state: "forged", need }
 }

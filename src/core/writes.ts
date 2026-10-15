@@ -1,4 +1,3 @@
-import { NoEntityFoundError } from "@arkiv-network/sdk"
 import { u64 } from "@arkiv-network/sdk/attr"
 import { ExpirationTime, jsonToPayload } from "@arkiv-network/sdk/utils"
 import type { Address, Hex } from "viem"
@@ -6,8 +5,8 @@ import type { PublicClient, WalletClient } from "./arkiv"
 import { assertNoPhone, needAttrs, orgAttrs, pledgeAttrs, receiptAttrs, siteAttrs, vouchAttrs } from "./attrs"
 import { assertPledgeEta, needLifetime, needsLeaseRenewal, pledgeExpiry, renewalTarget } from "./expiry"
 import { fromE6 } from "./geo"
-import { receiptExists } from "./queries"
-import { n, type Rec, s, toRec } from "./records"
+import { liveRec, receiptExists } from "./queries"
+import { n, type Rec, s } from "./records"
 import { type Item, LIFETIME, type OrgType, type SiteType, type Urgency } from "./schema"
 
 const json = (o: object) => ({ payload: jsonToPayload(o), contentType: "application/json" as const })
@@ -16,16 +15,6 @@ const noPayload = { payload: new Uint8Array(), contentType: "application/octet-s
 // Mobile numbers are personal data and must never reach a public Arkiv entity.
 const noPhones = (...texts: Array<string | undefined>) => {
   for (const text of texts) if (text) assertNoPhone(text)
-}
-
-// getEntity throws once an entity has expired or been deleted; for the writes here that is an ordinary state.
-async function liveRec(pub: PublicClient, key: Hex): Promise<Rec | undefined> {
-  try {
-    return toRec(await pub.getEntity(key))
-  } catch (error) {
-    if (error instanceof NoEntityFoundError) return undefined
-    throw error
-  }
 }
 
 type Lease = { key: Hex | undefined; lifetime: number; what: string; required?: boolean }
