@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { assertNoPhone, needAttrs, orgAttrs, pledgeAttrs, receiptAttrs } from "./attrs"
 import { n, s, toRec } from "./records"
+import { MAX_QTY } from "./schema"
 
 const SITE = `0x${"a".repeat(64)}` as const
 const NEED = `0x${"b".repeat(64)}` as const
@@ -22,6 +23,14 @@ describe("attribute builders", () => {
     expect(() => needAttrs({ site: SITE, state: "AS", district: "d", item: "ors", qty: 0, urgency: 2, lat: 27, lng: 94 })).toThrow(RangeError)
     expect(() => needAttrs({ site: SITE, state: "AS", district: "d", item: "ors", qty: 1.5, urgency: 2, lat: 27, lng: 94 })).toThrow(RangeError)
     expect(() => needAttrs({ site: SITE, state: "AS", district: "d", item: "ors", qty: 5, urgency: 4 as 3, lat: 27, lng: 94 })).toThrow(RangeError)
+  })
+
+  it("caps quantities at a sane maximum, so no entity can carry an absurd number", () => {
+    const need = (qty: number) => needAttrs({ site: SITE, state: "AS", district: "d", item: "ors", qty, urgency: 2, lat: 27, lng: 94 })
+    expect(() => need(MAX_QTY)).not.toThrow()
+    expect(() => need(MAX_QTY + 1)).toThrow(/at most/)
+    expect(() => pledgeAttrs({ need: NEED, site: SITE, district: "d", item: "ors", qty: MAX_QTY + 1, eta: 1_760_000_000 })).toThrow(RangeError)
+    expect(() => receiptAttrs({ pledge: NEED, need: NEED, site: SITE, district: "d", qty: MAX_QTY + 1, pledger: "0x1111111111111111111111111111111111111111" })).toThrow(RangeError)
   })
 
   it("links pledges and receipts by entity key", () => {

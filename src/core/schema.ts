@@ -35,6 +35,8 @@ const HOUR = 3600
 const DAY = 24 * HOUR
 
 // Entity Expiration per kind, in seconds: how long each Arkiv entity lives before it lapses unless extended.
+export const MAX_QTY = 10_000_000
+
 export const LIFETIME = {
   org: 90 * DAY,
   site: 7 * DAY,
