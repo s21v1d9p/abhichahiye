@@ -50,9 +50,9 @@ It works for them today: a phone browser, item names in English, Hindi and Assam
 ```sh
 git clone https://github.com/s21v1d9p/abhichahiye && cd abhichahiye && npm ci
 npm run abhi -- gaps dhemaji          # what the camps still need, after pledges
-npm run abhi -- need 0x9e4e8d9a0abd4d54b351f25f508c1475bcfa19e878b5d9d952c80a9bd77e8f4e   # LIVE, exit code 0
+npm run abhi -- need 0xe2b6f82fb53e96569bf407a65521603563d586692264a4b19eab3a931caa2e10   # LIVE, exit code 0
 npm run abhi -- need 0xfd651bfaba340da5a49cd7f7a99501050041b7d13f39350604ccedd0aa70cb98   # closed by a delivery: EXPIRED / NOT FOUND, exit code 2
-npm run abhi -- need 0x7423efaa363561a6b85ac23c5e22a1e484ebe8479f35e35ba28a6034ef91a8c4   # NOT WRITTEN BY ITS CAMP, exit code 2
+npm run abhi -- need 0xdcedcf96a7e7dd61cf4ef008127bf8c9bd7be9212f3d4b1991c4e0677f49c9a0   # NOT WRITTEN BY ITS CAMP, exit code 2
 ```
 
 ```text
@@ -70,7 +70,11 @@ curl -s https://rpc.tiramisu.db-chain.testnet.arkiv.network -H 'content-type: ap
 '{"jsonrpc":"2.0","id":1,"method":"arkiv_query","params":["app = str('"'"'abhichahiye'"'"') AND kind = str('"'"'need'"'"') AND district = str('"'"'dhemaji'"'"')",{"select":{"key":true,"creator":true,"expiresAt":true,"attributes":true},"limit":"0x14"}]}'
 ```
 
-It returns five needs, not four. The fifth (`0x7423efaa…`) names Silapathar's camp in its `site` attribute, but its `$creator` (`0x8d2a…`, the impostor) is not the wallet that created that camp (`0x2b8e…`). Every reader in this repo rejects it, using only `$creator`, which nobody can forge ([trust rules](arkiv/schema.md#trust-rules-all-based-on-the-immutable-creator-never-on-a-writable-attribute)).
+It returns five needs, not four. One of them (`0xdcedcf96…`) names Silapathar's camp in its `site` attribute, but its `$creator` (`0x8d2a…`, the impostor) is not the wallet that created that camp (`0x2b8e…`). Every reader in this repo rejects it, using only `$creator`, which nobody can forge ([trust rules](arkiv/schema.md#trust-rules-all-based-on-the-immutable-creator-never-on-a-writable-attribute)).
+
+The demo keys above stay the same while the keepalive runs. If one ever reads EXPIRED, `npm run abhi -- gaps dhemaji --json` prints the keys of the live needs, and this query lists every need, the impostor's included.
+
+If the endpoint answers `ANON_COST_LIMITED`, your network has spent Arkiv's anonymous query budget (every query costs 100 units; see [F9](arkiv/friction.md)). Wait for the `Retry-After`, or create a free access key on the [Hub](https://hub.arkiv.network) and put it after the URL (`…testnet.arkiv.network/<key>`). The CLI does this itself when `ARKIV_KEY` is set.
 
 ## Why Arkiv
 
