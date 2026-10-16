@@ -7,6 +7,8 @@ Built on [Arkiv](https://arkiv.network), the Web3 database, on the Tiramisu test
 - **Data contract:** [`arkiv/schema.md`](arkiv/schema.md) · **Friction report:** [`arkiv/friction.md`](arkiv/friction.md)
 - **Read the data without us:** `npm run abhi -- gaps dhemaji`, or the `curl` in [Reproduce it](#reproduce-it)
 
+![The AbhiChahiye board for Dhemaji district: live needs with countdowns, read straight from Arkiv](docs/media/board.png)
+
 ## The problem
 
 When a flood hits, help arrives from everywhere at once: the district administration, NGOs, volunteer groups and neighbourhood WhatsApp groups. Each keeps its own list of what the camps need. Nobody owns a shared, current picture, so the lists go stale within hours and keep being forwarded long after.
