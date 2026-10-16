@@ -109,7 +109,7 @@ Most views cost one or two `arkiv_query` calls, because every query spends 100 u
 ## Tracks
 
 - **Best Indian Use Case:** the users, problem and evidence above.
-- **Security:** every page shows and filters entities by `$creator`. A forged need, a receipt from someone other than the camp, or a vouch from an untrusted wallet changes nothing a reader sees. Readers also check each entity's shape, so a malformed entity is skipped instead of breaking the page.
+- **Security:** every page shows and filters entities by `$creator`. A forged need, a receipt from someone other than the camp, or a vouch from an untrusted wallet changes nothing a reader sees. Readers also hold every entity to the rules our own writers follow (known types, quantities, urgency and coordinates in range, text payload fields only), so a stranger's malformed entity is skipped instead of breaking or freezing the page ([`shape.ts`](src/core/shape.ts), [`hostile.test.ts`](src/core/hostile.test.ts)).
 - **Censorship Resistance:** if our site is taken down, blocked or abandoned, the board still exists: the CLI and the `curl` above read it straight from Arkiv, and the static frontend can be hosted by anyone.
 - **Open Source:** MIT code and a documented data contract ([`schema.md`](arkiv/schema.md)), with the trust rules and a code snippet, so another team can build a WhatsApp bot or a district dashboard on the same entities without asking us.
 
@@ -132,7 +132,7 @@ The demo wallets and their roles. The explorer lists every entity each one creat
 
 Visitors' browser wallets create entities too; each console links its own wallet on the explorer.
 
-**These needs are kept alive on purpose, and disclosed.** A GitHub Action ([`keepalive.yml`](.github/workflows/keepalive.yml)) runs the idempotent seed every hour, so the demo camps confirm their needs the way a real camp would and the board is not empty when you look. It uses the same `extendEntity` calls as the app and bypasses nothing. If it stops, every need lapses within 6 to 24 hours. The seed also asserts the scenario on chain each run (8 checks: gaps after pledges, the closed need, the receipt, the rejected impostor, the vouches).
+**These needs are kept alive on purpose, and disclosed.** A GitHub Action ([`keepalive.yml`](.github/workflows/keepalive.yml)) runs the idempotent seed, so the demo camps confirm their needs the way a real camp would and the board is not empty when you look. It is scheduled four times an hour, because GitHub delivers scheduled runs irregularly (we measured gaps of 3 to 5 hours on an hourly schedule), and each run re-confirms whatever has aged. It uses the same `extendEntity` calls as the app and bypasses nothing; the impostor keeps re-posting its forged need the same way. If it stops, every need lapses within 6 to 24 hours. The seed also asserts the scenario on chain each run (8 checks: gaps after pledges, the closed need, the receipt, the rejected impostor, the vouches).
 
 ## Run it yourself
 

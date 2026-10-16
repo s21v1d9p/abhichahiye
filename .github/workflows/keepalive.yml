@@ -1,12 +1,13 @@
 # The demo camps keep confirming their needs, as real camps would, so the live board is never empty when someone
 # looks at it. Every need still lapses by itself the moment this stops: nothing here bypasses Entity Expiration.
-# Needs live 6 to 24 hours and are re-confirmed once 40% of their lifetime has passed, so an hourly run with a few
-# skipped hours still keeps them alive.
+# GitHub delivers scheduled runs irregularly: on an hourly cron we measured gaps of 3 to 5 hours. So this asks four
+# times an hour, and the seed re-confirms a need once a tenth of its lifetime has passed: a 6-hour need survives a gap
+# of about 5 hours with the same key. Each run writes only what has aged, so most runs send no transaction at all.
 name: Keep the demo camps confirming
 
 on:
   schedule:
-    - cron: "17 * * * *"
+    - cron: "7,22,37,52 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -18,7 +19,8 @@ concurrency:
 
 jobs:
   keepalive:
-    runs-on: ubuntu-latest
+    # Pinned, so the ubuntu-latest move to a new image on 19 October cannot break the keepalive during judging.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7

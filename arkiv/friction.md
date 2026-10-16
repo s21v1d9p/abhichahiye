@@ -267,7 +267,7 @@ Tested the same way: what we did, what we expected, what happened. Transactions 
 | `extendEntity` | 25,240 | 0.0000252 |
 | `deleteEntity` | 24,510 | 0.0000245 |
 
-Re-confirming one need around the clock costs well under 0.001 test GLM a day, which is why the hourly keepalive for the demo camps needs no top-ups during judging.
+Re-confirming a need is one `extendEntity` (0.0000252 test GLM), plus the camp's site and organisation leases when they are renewed in the same batch. The demo keepalive re-confirms each need roughly once an hour, which comes to a few thousandths of a test GLM per camp per day; the seed tops a demo wallet up from the funder only when it falls below 0.02.
 
 ## The one thing to improve first
 

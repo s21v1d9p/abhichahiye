@@ -1,8 +1,9 @@
+import { ExpirationTime } from "@arkiv-network/sdk"
 import { jsonToPayload } from "@arkiv-network/sdk/utils"
 import type { Hex } from "viem"
 import type { PublicClient, WalletClient } from "./arkiv"
 import { needAttrs } from "./attrs"
-import { needLifetime, secondsLeft } from "./expiry"
+import { needLifetime, renewalTarget, secondsLeft } from "./expiry"
 import { computeGaps } from "./gaps"
 import { fromE6 } from "./geo"
 import { liveRec, loadDistrict, myEntities } from "./queries"
@@ -56,8 +57,12 @@ const NEEDS: Record<CampRole, NeedSpec[]> = {
   camp_dhemaji: [{ item: "water", qty: 2000, urgency: 3, note: "Litres of packaged drinking water" }],
 }
 
-const RECONFIRM_BELOW = 0.6
-const PLEDGE_HOURS = 3
+// The keepalive runs on GitHub's schedule, which in practice arrives hours apart (we measured gaps of 3 to 5 hours on
+// an hourly cron). So a demo need is re-confirmed once a tenth of its lifetime has passed, and the demo pledge keeps
+// its arrival 4 to 6 hours ahead: everything survives a gap of about 5 hours without changing its key.
+const RECONFIRM_BELOW = 0.9
+const PLEDGE_HOURS = 6
+const PLEDGE_DELAY_BELOW_HOURS = 4
 
 export type ScenarioOptions = { log?: (message: string) => void; demoExpiry?: boolean }
 export type Check = { name: string; ok: boolean; detail: string }
@@ -157,7 +162,7 @@ async function keepClothesPledge(pub: PublicClient, w: Wallets, orgs: Record<Rol
       note: "One truck from Dibrugarh",
       orgKey: orgs.ngo_brahmaputra.key,
     })
-  } else if (Number(n(pledge, "eta")) - unix() < 3600) {
+  } else if (Number(n(pledge, "eta")) - unix() < PLEDGE_DELAY_BELOW_HOURS * 3600) {
     await delayPledge(w.ngo_brahmaputra, pub, pledge, unix() + PLEDGE_HOURS * 3600)
   }
 }
@@ -197,11 +202,26 @@ async function playJonaiStory(
   log("Jonai relief camp: recorded the delivery, need closed")
 }
 
-// A stranger copies Silapathar's real site key into a need of their own. Nothing stops them writing it.
+// A stranger copies Silapathar's real site key into a need of their own. Nothing stops them writing it, or keeping it
+// alive: like a real impostor it re-posts the same need, so its key stays the same and the documented link to it keeps
+// showing the rejection. It extends only its own need; it cannot touch the camp's listing. Its need is the longest-lived
+// kind (24 hours), so the documented key survives even a long gap between keepalive runs.
+const IMPOSTOR_URGENCY = 1
+
 async function ensureImpostorNeed(pub: PublicClient, w: Wallets, site: Rec, log: (message: string) => void): Promise<void> {
-  if ((await mine(pub, "need", w.impostor)).length > 0) return
+  const [existing] = await mine(pub, "need", w.impostor)
+  const lifetime = LIFETIME.need[IMPOSTOR_URGENCY]
+  if (existing) {
+    const { currentBlock } = await pub.getBlockTiming()
+    if (secondsLeft(existing.expiresAt, currentBlock) < lifetime * RECONFIRM_BELOW) {
+      const expires = ExpirationTime.atBlock(renewalTarget(existing.expiresAt, currentBlock, lifetime))
+      await w.impostor.extendEntity({ entityKey: existing.key, expires })
+      log("impostor: kept its need alive")
+    }
+    return
+  }
   await w.impostor.createEntity({
-    payload: jsonToPayload({ note: "Urgent: send water for Silapathar camp" }),
+    payload: jsonToPayload({ note: "Send water for Silapathar camp" }),
     contentType: "application/json",
     attributes: needAttrs({
       site: site.key,
@@ -209,11 +229,11 @@ async function ensureImpostorNeed(pub: PublicClient, w: Wallets, site: Rec, log:
       district: DISTRICT,
       item: "water",
       qty: 999,
-      urgency: 3,
+      urgency: IMPOSTOR_URGENCY,
       lat: fromE6(n(site, "lat_e6")),
       lng: fromE6(n(site, "lng_e6")),
     }),
-    expires: needLifetime(3),
+    expires: needLifetime(IMPOSTOR_URGENCY),
   })
   log("impostor: wrote a need that points at Silapathar's real camp")
 }

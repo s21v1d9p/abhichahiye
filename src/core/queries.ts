@@ -103,13 +103,13 @@ function assemble(block: bigint, truncated: boolean, k: Partial<ByKind>): Distri
 }
 
 // A need shows the name of the organisation that confirmed it. Most are registered in the same district and arrive
-// with it; the rest take one more query, by creator.
+// with it; the rest take one more query, by creator, and go through the same shape checks as everything else.
 async function withNames(client: PublicClient, orgs: Rec[], creators: Hex[], block: bigint): Promise<Fetched> {
   const known = new Set<string>(orgs.map((o) => o.creator))
   const missing = [...new Set(creators)].filter((c) => !known.has(c)).slice(0, MAX_OR)
   if (missing.length === 0) return { recs: orgs, truncated: false, block }
   const more = await fetchAll(client, [...ofKind("org"), byCreator(missing)], {}, block)
-  return { recs: [...orgs, ...more.recs], truncated: more.truncated, block }
+  return { recs: [...orgs, ...byKind(more.recs).org], truncated: more.truncated, block }
 }
 
 export async function loadDistrict(client: PublicClient, f: DistrictFilter): Promise<DistrictData> {

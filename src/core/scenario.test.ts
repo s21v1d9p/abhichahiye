@@ -46,6 +46,38 @@ describe("seeded scenario", () => {
     expect(results.length).toBeGreaterThanOrEqual(6)
   })
 
+  // The README and the demo link to the impostor's need by key. Like a real impostor, it keeps re-posting the same
+  // need; a fresh one every six hours would leave every documented link pointing at an expired entity.
+  it("keeps the impostor's need under one key across a day of hourly runs, still rejected", async () => {
+    await runScenario(chain.pub, wallets)
+    const impostorNeeds = () => myEntities(chain.pub, "need", wallets.impostor.account.address)
+    const [first] = await impostorNeeds()
+    for (let hour = 1; hour <= 30; hour++) {
+      tick(3600)
+      await runScenario(chain.pub, wallets)
+    }
+    expect((await impostorNeeds()).map((x) => x.key)).toEqual([first!.key])
+    expect((await loadNeed(chain.pub, first!.key)).state).toBe("forged")
+  })
+
+  // GitHub delivers scheduled runs irregularly: we measured gaps of 3 to 5 hours on an hourly cron. A run shortly after
+  // the previous one followed by a long gap is the worst case for a 6-hour need.
+  it("keeps every demo key through uneven gaps of up to 5.3 hours between runs", async () => {
+    await runScenario(chain.pub, wallets)
+    const keys = async () => {
+      const needs = await Promise.all((["camp_silapathar", "camp_jonai", "camp_dhemaji", "impostor"] as const).map((r) => myEntities(chain.pub, "need", wallets[r].account.address)))
+      const pledges = await myEntities(chain.pub, "pledge", wallets.ngo_brahmaputra.account.address)
+      return [...needs.flat(), ...pledges].map((x) => x.key).sort()
+    }
+    const before = await keys()
+    for (const hours of [0.5, 5.3, 0.25, 5.3, 2, 5, 1, 5.3]) {
+      tick(hours * 3600)
+      await runScenario(chain.pub, wallets)
+    }
+    expect(await keys()).toEqual(before)
+    expect((await assertScenario(chain.pub, wallets)).filter((r) => !r.ok)).toEqual([])
+  })
+
   it("shows a gap of 180 for Silapathar's clothes after the pledge of 120", async () => {
     await runScenario(chain.pub, wallets)
     const { gaps } = await board()
@@ -110,12 +142,13 @@ describe("Entity Expiration over time", () => {
 
   it("reopens the gap on schedule when a pledge is never delivered", async () => {
     await runScenario(chain.pub, wallets)
-    expect((await find((await board()).gaps, "camp_silapathar", "clothes"))?.gap).toBe(180n)
-    tick(5 * 3600 + 60)
-    const after = await board()
-    const clothes = await find(after.gaps, "camp_silapathar", "clothes")
-    expect(clothes?.pledged).toBe(0n)
-    expect(clothes?.gap).toBe(300n)
+    const need = (await board()).data.needs.find((x) => x.creator === wallets.camp_silapathar.account.address.toLowerCase() && s(x, "item") === "clothes")!
+    await pledgeTo(wallets.ngo_majuli, chain.pub, { need, qty: 50, etaUnix: Math.floor(Date.now() / 1000) + 3600 })
+    expect((await find((await board()).gaps, "camp_silapathar", "clothes"))?.gap).toBe(130n)
+    // Promised for one hour from now, it lapses two hours after that, and the 50 count as missing again.
+    tick(3 * 3600 + 60)
+    const clothes = await find((await board()).gaps, "camp_silapathar", "clothes")
+    expect([clothes?.pledged, clothes?.gap]).toEqual([120n, 180n])
   })
 
   it("keeps the board alive when the scenario is run again on a schedule", async () => {

@@ -8,7 +8,7 @@ export type Rec = {
   owner: Address
   expiresAt: bigint
   attrs: Record<string, AttrValue>
-  payload: Record<string, unknown>
+  payload: Readonly<Partial<Record<string, string>>>
 }
 
 type EntityLike = {
@@ -20,6 +20,11 @@ type EntityLike = {
   payload?: Uint8Array | undefined
 }
 
+// C0 and C1 control characters, ESC included. Printed to a terminal, a stranger's text could move the cursor and
+// overwrite what the command line shows about other camps; on a page they are invisible at best.
+const CONTROL = /[\u0000-\u001f\u007f-\u009f]/g
+const clean = (text: string) => text.replace(CONTROL, " ")
+
 // Strings, keys and addresses are lowercased so equality checks never depend on hex casing.
 export function toRec(e: EntityLike): Rec {
   if (!e.key || !e.creator || !e.owner || e.expiresAt === undefined) {
@@ -27,16 +32,19 @@ export function toRec(e: EntityLike): Rec {
   }
   const attrs: Record<string, AttrValue> = {}
   for (const [name, v] of Object.entries(e.attributes ?? {})) {
-    attrs[name] = typeof v.value === "bigint" ? v.value : String(v.value).toLowerCase()
+    attrs[name] = typeof v.value === "bigint" ? v.value : clean(String(v.value).toLowerCase())
   }
-  // Anyone can write any payload. Only a JSON object is kept, so readers can always do `payload.name`.
-  let payload: Record<string, unknown> = {}
+  // Anyone can write any payload. Only the string fields of a JSON object are kept, so a reader can always print
+  // `payload.name` (String() throws on an object such as {"toString": 1}).
+  const payload: Record<string, string> = {}
   if (e.payload && e.payload.length > 0) {
     try {
       const parsed: unknown = JSON.parse(new TextDecoder().decode(e.payload))
-      if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) payload = parsed as Record<string, unknown>
+      if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+        for (const [field, value] of Object.entries(parsed)) if (typeof value === "string") payload[field] = clean(value)
+      }
     } catch {
-      payload = {}
+      // Not JSON: nothing to keep.
     }
   }
   return {
