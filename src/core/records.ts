@@ -23,7 +23,10 @@ type EntityLike = {
 // C0 and C1 control characters, ESC included. Printed to a terminal, a stranger's text could move the cursor and
 // overwrite what the command line shows about other camps; on a page they are invisible at best.
 const CONTROL = /[\u0000-\u001f\u007f-\u009f]/g
-const clean = (text: string) => text.replace(CONTROL, " ")
+// A surrogate pair, or a lone surrogate: JSON can carry one ("\ud800"), and encodeURIComponent throws on it. Pairs are
+// kept, lone halves become U+FFFD. (No lookbehind, which older Safari cannot even parse.)
+const SURROGATE = /[\ud800-\udbff][\udc00-\udfff]|[\ud800-\udfff]/g
+const clean = (text: string) => text.replace(CONTROL, " ").replace(SURROGATE, (unit) => (unit.length === 2 ? unit : "\ufffd"))
 
 // Strings, keys and addresses are lowercased so equality checks never depend on hex casing.
 export function toRec(e: EntityLike): Rec {

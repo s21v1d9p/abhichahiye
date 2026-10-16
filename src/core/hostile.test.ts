@@ -65,6 +65,19 @@ describe("toRec", () => {
     expect(rec.payload.name).toBe("Camp [2J [1A  X 31m")
     expect(s(rec, "district")).toBe("dhe ]0;x maji")
   })
+
+  // JSON can carry a lone UTF-16 surrogate ("\ud800"), and encodeURIComponent throws on one: the need page builds its
+  // WhatsApp link from the camp name and district while it renders.
+  it("replaces unpaired surrogates and keeps real pairs, so a name can always go into a link", () => {
+    const rec = toRec({
+      ...base,
+      payload: new TextEncoder().encode('{"name":"Camp \\ud800 \\udc00 \\ud83d\\ude00"}'),
+      attributes: { district: { type: "str", value: "dhe\ud800maji" } },
+    })
+    expect(rec.payload.name).toBe("Camp \ufffd \ufffd \ud83d\ude00")
+    expect(s(rec, "district")).toBe("dhe\ufffdmaji")
+    expect(() => encodeURIComponent(`${rec.payload.name} ${s(rec, "district")}`)).not.toThrow()
+  })
 })
 
 // A reader accepts exactly what our own writers (attrs.ts) can produce. Anything else was not written by AbhiChahiye,
