@@ -5,3 +5,4 @@ dist/
 .seed-wallets.json
 .vercel/
 *.log
+public/demo.mp4

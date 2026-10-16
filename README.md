@@ -4,6 +4,7 @@
 Built on [Arkiv](https://arkiv.network), the Web3 database, on the Tiramisu testnet.
 
 - **Live app:** https://abhichahiye.vercel.app (no sign-up, works on a phone; a test wallet is created and funded for you on your first write)
+- **Demo video (2:54):** https://abhichahiye.vercel.app/demo.mp4
 - **Data contract:** [`arkiv/schema.md`](arkiv/schema.md) · **Friction report:** [`arkiv/friction.md`](arkiv/friction.md)
 - **Read the data without us:** `npm run abhi -- gaps dhemaji`, or the `curl` in [Reproduce it](#reproduce-it)
 
