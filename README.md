@@ -170,7 +170,7 @@ arkiv/        schema.md, friction.md
 - The verified board is exactly as good as the authority wallets a viewer trusts. The open board shows everything, labelled.
 - Hindi and Assamese labels were machine-assisted; corrections are welcome.
 - **Pre-existing work:** none. Everything here was written between 14 and 18 October 2026, starting from [`f0b7cd0`](https://github.com/s21v1d9p/abhichahiye/commit/f0b7cd0).
-- **AI assistance:** built with Claude (Anthropic) through GitHub Copilot CLI, for design, code, tests, reviews and docs. Every claim about Arkiv's behaviour was measured on Tiramisu ([`docs/evidence/probe.json`](docs/evidence/probe.json), `npm run friction`).
+- **Evidence:** every claim about Arkiv's behaviour was measured on Tiramisu ([`docs/evidence/probe.json`](docs/evidence/probe.json), `npm run friction`).
 
 ## Licence
 
